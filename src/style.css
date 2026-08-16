@@ -371,6 +371,21 @@ body::after {
 .win-btn:hover { color: var(--green); border-color: var(--green-dim); background: rgba(60,255,136,0.08); }
 .win-close:hover { color: #ff7b7b; border-color: rgba(255,123,123,0.5); }
 
+/* 示波器窗口顶部 MIX 开关 */
+.win-mix-toggle {
+  width: auto;
+  padding: 0 7px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+}
+.win-mix-toggle.on {
+  color: #d7ffe9;
+  border-color: var(--green-dim);
+  background: rgba(60, 255, 136, 0.14);
+  box-shadow: 0 0 8px rgba(60, 255, 136, 0.35);
+}
+
 .win-body {
   flex: 1;
   min-height: 0;

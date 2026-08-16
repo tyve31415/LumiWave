@@ -1,7 +1,8 @@
 /* =========================================================
-   主示波器：4 通道示波器（CH1–CH4 各占一栏 + MIX 混合输出栏）
-   · 波形模式：5 栏横向分栏，每栏一条彩色波形 + 栏标签
-   · 频谱模式：5 栏频谱（CH1–CH4 + MIX）
+   主示波器：4 通道示波器（默认仅 CH1–CH4 各占一栏；
+   窗口顶部 MIX 按钮可切换显示 MIX 混合输出栏）
+   · 波形模式：分栏彩色波形 + 栏标签
+   · 频谱模式：分栏频谱
    性能优化：
    1. 网格静态层缓存到离屏画布，仅尺寸变化时重绘
    2. 波形辉光用「双描边」替代 shadowBlur（显著降低 GPU 开销）
@@ -18,6 +19,7 @@ import { clamp, TWO_PI, PI, midiToFreq } from '../core/math.js';
 
 export const scopeState = {
   mode: 'wave',        // 'wave' | 'spectrum'
+  showMix: false,      // 默认只显示 4 个通道；窗口顶部 MIX 按钮切换显示混合栏
   amp: 0.24,
   samples: 2048,
   specAmp: 1.0,
@@ -56,20 +58,21 @@ function renderGridLayer() {
     g.beginPath(); g.moveTo(x, 0); g.lineTo(x, scopeState.h); g.stroke();
   }
   // 每栏横向细网格
-  const laneH = scopeState.h / 5;
+  const lanes = scopeState.showMix ? 5 : 4;
+  const laneH = scopeState.h / lanes;
   for (let i = 0; i <= 10; i++) {
     const y = (i / 10) * scopeState.h;
     g.beginPath(); g.moveTo(0, y); g.lineTo(scopeState.w, y); g.stroke();
   }
   // 栏中线（每栏内）
   g.strokeStyle = 'rgba(60,255,136,0.10)';
-  for (let lane = 0; lane < 5; lane++) {
+  for (let lane = 0; lane < lanes; lane++) {
     const mid = lane * laneH + laneH / 2;
     g.beginPath(); g.moveTo(0, mid); g.lineTo(scopeState.w, mid); g.stroke();
   }
-  // 分栏分隔线（CH1–CH4 + MIX）
+  // 分栏分隔线（CH1–CH4，显示 MIX 时共 5 栏）
   g.strokeStyle = 'rgba(60,255,136,0.24)';
-  for (let lane = 1; lane < 5; lane++) {
+  for (let lane = 1; lane < lanes; lane++) {
     const y = lane * laneH;
     g.beginPath(); g.moveTo(0, y); g.lineTo(scopeState.w, y); g.stroke();
   }
@@ -98,7 +101,8 @@ function laneAmp(laneH) {
 /** CH1–CH4：各占一栏的独立彩色波形 */
 function drawChannelLanes() {
   const w = scopeState.w, h = scopeState.h;
-  const laneH = h / 5;
+  const lanes = scopeState.showMix ? 5 : 4;
+  const laneH = h / lanes;
   const amp = laneAmp(laneH);
   const n = Math.min(scopeState.samples, 2048);
   for (let i = 0; i < CH_DEFS.length; i++) {
@@ -131,9 +135,9 @@ function drawChannelLanes() {
   }
 }
 
-/** MIX 混合输出栏（亮绿双描边） */
+/** MIX 混合输出栏（亮绿双描边；仅当顶部 MIX 开关打开时显示） */
 function drawMixLane() {
-  if (!analyser) return;
+  if (!analyser || !scopeState.showMix) return;
   const w = scopeState.w, h = scopeState.h;
   const laneH = h / 5;
   const y0 = 4 * laneH;
@@ -216,7 +220,8 @@ function drawSpecBand(label, color, data, y0, bh) {
 function drawSpectrum() {
   if (!ctx) return;
   const h = scopeState.h;
-  const laneH = h / 5;
+  const lanes = scopeState.showMix ? 5 : 4;
+  const laneH = h / lanes;
   for (let i = 0; i < CH_DEFS.length; i++) {
     const d = CH_DEFS[i];
     const s = chState[d.id];
@@ -236,8 +241,8 @@ function drawSpectrum() {
       sctx.restore();
     }
   }
-  // MIX 混合输出栏
-  if (spectrumAnalyser) {
+  // MIX 混合输出栏（仅当顶部 MIX 开关打开时显示）
+  if (scopeState.showMix && spectrumAnalyser) {
     spectrumAnalyser.getByteFrequencyData(freqData);
     drawSpecBand('MIX 混合输出', '#eafff2', freqData, 4 * laneH, laneH);
   }
@@ -258,6 +263,15 @@ export function drawScope() {
 export function toggleScopeMode() {
   scopeState.mode = scopeState.mode === 'wave' ? 'spectrum' : 'wave';
   el.viewToggle.textContent = scopeState.mode === 'wave' ? '波形' : '频谱';
+}
+
+/** 顶部 MIX 开关：默认只显示 4 通道，点击切换显示 MIX 混合栏 */
+export function toggleMixLane() {
+  scopeState.showMix = !scopeState.showMix;
+  el.mixToggle.textContent = scopeState.showMix ? 'MIX ✓' : 'MIX';
+  el.mixToggle.classList.toggle('on', scopeState.showMix);
+  el.mixToggle.title = scopeState.showMix ? '隐藏 MIX 混合通道' : '切换显示 MIX 混合通道';
+  resizeScope(); // 栏数变化 → 重算画布与网格
 }
 
 /* ---------- 频率读数 ---------- */
@@ -385,6 +399,7 @@ export function initScope() {
   resizeScope();
   initScopeKnobs();
   el.viewToggle.addEventListener('click', toggleScopeMode);
+  el.mixToggle.addEventListener('click', toggleMixLane);
   // 窗口大小/显示变化 → 重算画布与网格
   if (typeof ResizeObserver === 'function') {
     new ResizeObserver(function () { resizeScope(); }).observe(el.scope);

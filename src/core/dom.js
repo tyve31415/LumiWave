@@ -10,6 +10,7 @@ export const el = {
   scope: byId('scope'),
   scopeMulti: byId('scopeMulti'),
   viewToggle: byId('viewToggle'),
+  mixToggle: byId('mixToggle'),
   freqReadout: byId('freqReadout'),
 
   playBtn: byId('playBtn'),

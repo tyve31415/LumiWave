@@ -512,6 +512,19 @@ function createWindow() {
         '})'
       );
     }).then(function () {
+      // 2.8. 示波器 MIX 开关：默认隐藏 MIX 栏，窗口顶部按钮可切换显示
+      return probe('scope-mix',
+        'import("./ui/scope.js").then(function (s) {' +
+        '  var btn = document.getElementById("mixToggle");' +
+        '  var initial = btn && s.scopeState.showMix === false;' +
+        '  btn.click();' +
+        '  var on = s.scopeState.showMix === true && btn.classList.contains("on");' +
+        '  btn.click();' +
+        '  var off = s.scopeState.showMix === false && !btn.classList.contains("on");' +
+        '  return { btn: !!btn, initial: initial, toggleOn: on, toggleOff: off };' +
+        '})'
+      );
+    }).then(function () {
       // 3. 「应用全部函数」：完整用户流程验证（带进度日志，任何挂起点都会暴露）
       return probe('apply-button',
         '(async function () {' +
