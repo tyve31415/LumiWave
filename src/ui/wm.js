@@ -37,7 +37,7 @@ const DOCK_SIDE_LABEL = { right: '▶', left: '◀', bottom: '▼', top: '▲' }
    点击窗口外自动收起，默认隐藏） */
 const WIN_DEFS = [
   { id: 'explorer',  title: '🗂 收藏夹 · 本地音乐', short: '收藏夹', x: 10,   y: 10,  w: 336, h: 780, minW: 300, minH: 400, fixed: true },
-  { id: 'channels',  title: '🎛 通道控制',          short: '通道',   x: 408,  y: 48,  w: 720, h: 300, minW: 460, minH: 100, popup: true },
+  { id: 'channels',  title: '🎛 通道控制',          short: '通道',   x: 408,  y: 48,  w: 720, h: 320, minW: 460, minH: 100, popup: true },
   { id: 'scope',     title: '◉ 主示波器',          short: '示波器', x: 356,  y: 10,  w: 824, h: 400, minW: 380, minH: 240 },
   { id: 'mixer',     title: '🎹 混音器 · CH1',      short: '混音器', x: 356,  y: 420, w: 450, h: 370, minW: 380, minH: 240 },
   { id: 'timeline',  title: '🕘 时间线 · CH2',      short: '时间线', x: 816,  y: 420, w: 364, h: 370, minW: 320, minH: 200 },
@@ -852,13 +852,15 @@ export function initWM() {
       // 固定栏：始终回到预设槽位，忽略旧布局记忆
       r = defaultRect(def);
     } else if (typeof s.x === 'number' && typeof s.w === 'number') {
-      r = { x: s.x, y: s.y, w: Math.max(def.minW, s.w), h: Math.max(def.minH, s.h) };
       if (def.popup) {
-        // 弹出层：恢复记忆位置（仅限制在桌面内，允许覆盖其他窗口）
+        // 弹出层：仅恢复记忆位置；尺寸恒定用默认值（旧版保存的小尺寸作废）
+        const dr = defaultRect(def);
+        r = { x: s.x, y: s.y, w: dr.w, h: dr.h };
         r.x = Math.max(-r.w + 70, Math.min(canvasW - 70, r.x));
         r.y = Math.max(0, Math.min(canvasH - 26, r.y));
-      } else if (!isRectValid(def.id, r)) {
-        r = findFreeRect(def.id, r);
+      } else {
+        r = { x: s.x, y: s.y, w: Math.max(def.minW, s.w), h: Math.max(def.minH, s.h) };
+        if (!isRectValid(def.id, r)) r = findFreeRect(def.id, r);
       }
     }
     if (!r) r = defaultRect(def);

@@ -372,9 +372,12 @@ function createWindow() {
         '  function pe(t, type, x, y){ t.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true })); }' +
         '  function ovInternal(d){ var ws=d.wins, ids=Object.keys(ws), o=[]; for(var i=0;i<ids.length;i++)for(var j=i+1;j<ids.length;j++){ var a=ws[ids[i]], b=ws[ids[j]]; if(!a.visible||!b.visible)continue; if(a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y)o.push(ids[i]+"x"+ids[j]); } return o; }' +
         // 0) 先归一化布局：忽略用户记忆的窗口状态，从默认分屏开始测试
+        //    归一化前先检查弹出层载入尺寸（旧版保存的小尺寸不得生效）
+        '  var m = await import("./ui/wm.js");' +
+        '  var dPre = m._debugState();' +
+        '  var popupSizeOk = Math.abs(dPre.wins.channels.h - dPre.canvas.h * 320 / 800) <= 4;' +
         '  document.querySelector(".win-menu-arrange").click();' +
         '  await settle(120);' +
-        '  var m = await import("./ui/wm.js");' +
         '  var d0 = m._debugState();' +
         '  var ex0 = d0.wins.explorer;' +
         '  var w = document.querySelector(".win[data-win=timeline]");' +
@@ -462,7 +465,7 @@ function createWindow() {
         '  await settle(150);' +
         '  var d3 = m._debugState();' +
         '  var visCount = 0; for (var k in d3.wins) if (d3.wins[k].visible) visCount++;' +
-        '  return { locks: locks, unlocked: unlocked, handleVisible: handleVisible, noLockBtn: noLockBtn, fixedStillLocked: fixedStillLocked, fixedNoHandles: fixedNoHandles, leftCol: leftCol, fixedStable: fixedStable, navOverflow: navOverflow, menuOpenOk: menuOpenOk, menuClosedOk: menuClosedOk, menuItemCount: menuItemCount, docked: docked, badge: badgeEl ? badgeEl.textContent : null, scopeShrunk: scopeShrunk, overlapsAfterDock: ovAfterDock, moved: moved, detached: detached, overlapsAfterMove: ovAfterMove, popupShown: popupShown, popupCentered: popupCentered, popupOnTop: popupOnTop, popupNoHandles: popupNoHandles, popupNoLock: popupNoLock, popupUnlocked: popupUnlocked, popupClosedOutside: popupClosedOutside, popupReopen: popupReopen, popupMoved: popupMoved, popupToggleHide: popupToggleHide, overlapsAfterArrange: ovInternal(d3), visibleCount: visCount };' +
+        '  return { locks: locks, unlocked: unlocked, handleVisible: handleVisible, noLockBtn: noLockBtn, fixedStillLocked: fixedStillLocked, fixedNoHandles: fixedNoHandles, leftCol: leftCol, fixedStable: fixedStable, navOverflow: navOverflow, menuOpenOk: menuOpenOk, menuClosedOk: menuClosedOk, menuItemCount: menuItemCount, popupSizeOk: popupSizeOk, docked: docked, badge: badgeEl ? badgeEl.textContent : null, scopeShrunk: scopeShrunk, overlapsAfterDock: ovAfterDock, moved: moved, detached: detached, overlapsAfterMove: ovAfterMove, popupShown: popupShown, popupCentered: popupCentered, popupOnTop: popupOnTop, popupNoHandles: popupNoHandles, popupNoLock: popupNoLock, popupUnlocked: popupUnlocked, popupClosedOutside: popupClosedOutside, popupReopen: popupReopen, popupMoved: popupMoved, popupToggleHide: popupToggleHide, overlapsAfterArrange: ovInternal(d3), visibleCount: visCount };' +
         '})()'
       );
     }).then(function () {
