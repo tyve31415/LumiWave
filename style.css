@@ -478,6 +478,7 @@ button.primary {
   background: rgba(2, 7, 4, 0.6);
   border-bottom: 1px solid rgba(18, 59, 39, 0.6);
   cursor: crosshair;
+  touch-action: none;
 }
 .tl-lane:hover { background: rgba(60, 255, 136, 0.05); }
 
@@ -485,6 +486,7 @@ button.primary {
   position: absolute;
   top: 3px;
   bottom: 3px;
+  touch-action: none;
   background: linear-gradient(180deg, #1f6b3f, #0d2b19);
   border: 1px solid var(--green);
   border-radius: 3px;

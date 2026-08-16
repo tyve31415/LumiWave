@@ -136,7 +136,8 @@
       running: false,
       held: [],
       heldSet: {},
-      seq: { running: false, bpm: 120, t0: 0, steps: [] }
+      seq: { running: false, bpm: 120, t0: 0, steps: [] },
+      voiceErrors: []
     };
   }
 
@@ -181,7 +182,18 @@
         for (let v = 0; v < vs.length; v++) {
           const vo = vs[v];
           if (!vo.enabled) continue;
-          let val = vo.fn(state.t, state.freq, state.env);
+          if (vo.broken) { if (cap) disp[v][di] = 0; continue; }
+          let val;
+          try {
+            val = vo.fn(state.t, state.freq, state.env);
+          } catch (err) {
+            vo.broken = true;
+            if (state.voiceErrors.length < 8) {
+              state.voiceErrors.push({ index: v, message: String((err && err.message) || err) });
+            }
+            if (cap) disp[v][di] = 0;
+            continue;
+          }
           if (typeof val !== 'number' || !isFinite(val)) val = 0;
           val *= vo.gain;
           if (cap) disp[v][di] = val;
@@ -269,6 +281,7 @@
     lines.push('    var out = outputs[0];');
     lines.push('    if(out && out.length){');
     lines.push('      processBlock(this.state, sampleRate, out[0], out.length > 1 ? out[1] : out[0]);');
+    lines.push('      if(this.state.voiceErrors && this.state.voiceErrors.length){ this.port.postMessage({ type: "voiceError", data: this.state.voiceErrors }); this.state.voiceErrors = []; }');
     lines.push('      if(this.recording){ this.port.postMessage({ type: "samples", data: out[0].slice(0) }); }');
     lines.push('      var disp = this.state.display;');
     lines.push('      if(disp && this.state.dispIdx >= disp[0].length){ var arr = []; for(var k = 0; k < disp.length; k++){ arr.push(disp[k].slice(0)); } this.port.postMessage({ type: "display", data: arr }); this.state.dispIdx = 0; }');
@@ -348,12 +361,13 @@
 
   function readVarLen(view, pos) {
     let value = 0;
-    while (true) {
+    for (let i = 0; i < 4; i++) {
+      if (pos >= view.byteLength) throw new Error('MIDI 文件损坏（变长数值越界）');
       const b = view.getUint8(pos++);
       value = (value << 7) | (b & 0x7f);
-      if ((b & 0x80) === 0) break;
+      if ((b & 0x80) === 0) return [value, pos];
     }
-    return [value, pos];
+    throw new Error('MIDI 文件损坏（变长数值过长）');
   }
 
   function parseMidi(arrayBuffer) {
@@ -377,7 +391,7 @@
       if (pos + 8 > view.byteLength) break;
       const tLen = view.getUint32(pos + 4);
       pos += 8;
-      const trackEnd = pos + tLen;
+      const trackEnd = Math.min(pos + tLen, view.byteLength);
       let absTick = 0;
       let runningStatus = null;
       const raw = [];
@@ -400,6 +414,12 @@
         } else if (status === 0xF0 || status === 0xF7) {
           const rl = readVarLen(view, pos + 1);
           pos = rl[1] + rl[0];
+        } else if (status === 0xF1 || status === 0xF3) {
+          pos += 1;
+        } else if (status === 0xF2) {
+          pos += 2;
+        } else if (status >= 0xF4 && status <= 0xFE) {
+          // 系统公共/实时消息（无数据字节）
         } else {
           if (status < 0x80) {
             status = runningStatus;
@@ -460,7 +480,7 @@
     if (!notes || !notes.length) return null;
     const bpm = parsed.tempos.length ? parsed.tempos[0].bpm : 120;
     const ts = parsed.timeSigs.length ? parsed.timeSigs[0] : { num: 4, den: 4 };
-    const ticksPerBar = ppq * ts.num;
+    const ticksPerBar = ppq * ts.num * 4 / Math.max(1, ts.den);
 
     const byCh = {};
     for (let i = 0; i < notes.length; i++) {
@@ -584,10 +604,12 @@
   const demoResetBtn = document.getElementById('demoResetBtn');
 
   /* ---------- 状态 ---------- */
-  let ctx = null, analyser = null, spectrumAnalyser = null, masterGain = null, panNode = null;
+  let ctx = null, analyser = null, spectrumAnalyser = null, masterGain = null, compNode = null, panNode = null;
   let node = null, workletNode = null, fallbackState = null;
   let running = false;
   let recording = false;
+  let recStartWall = 0;
+  const MAX_REC_MS = 15 * 60 * 1000;
   let recChunks = [];
   let volumeLevel = 0.5;
   let baseFreq = 440;
@@ -607,6 +629,7 @@
   let tlBpm = 120;
   let tlBars = 8;
   let tlPlaying = false;
+  let tlStarting = false;
   let tlStartWall = 0;
   let tlNewMidi = 69;
   // 音频播放器状态
@@ -643,6 +666,19 @@
 
   function showError(msg) { errorEl.textContent = msg; }
 
+  function handleVoiceErrors(errs) {
+    for (let i = 0; i < errs.length; i++) {
+      const info = errs[i];
+      const v = voices[info.index];
+      if (!v) continue;
+      v.enabled = false;
+      v.error = '运行时错误，声部已停用：' + (info.message || '未知错误');
+      send({ type: 'voice', index: info.index, gain: v.gain, enabled: false });
+      showError('V' + (info.index + 1) + ' 运行时出错，已自动停用该声部');
+    }
+    updateVoiceUI();
+  }
+
   /* ---------- 音频图 ---------- */
   async function ensureCtx() {
     if (ctx) return;
@@ -662,6 +698,12 @@
 
     masterGain = ctx.createGain();
     masterGain.gain.value = 0;
+    compNode = ctx.createDynamicsCompressor();
+    compNode.threshold.value = -12;
+    compNode.knee.value = 20;
+    compNode.ratio.value = 6;
+    compNode.attack.value = 0.003;
+    compNode.release.value = 0.25;
     panNode = (typeof ctx.createStereoPanner === 'function') ? ctx.createStereoPanner() : null;
 
     if (typeof AudioWorkletNode === 'function') {
@@ -674,8 +716,9 @@
         n.port.onmessage = function (e) {
           const d = e.data;
           if (!d) return;
-          if (d.type === 'samples') recChunks.push(d.data);
+          if (d.type === 'samples') { if (recording) recChunks.push(d.data); }
           else if (d.type === 'display') voiceDisplay = d.data;
+          else if (d.type === 'voiceError') handleVoiceErrors(d.data);
         };
         workletNode = n;
         node = n;
@@ -691,6 +734,10 @@
         const L = e.outputBuffer.getChannelData(0);
         const R = e.outputBuffer.getChannelData(1);
         processBlock(fallbackState, ctx.sampleRate, L, R);
+        if (fallbackState.voiceErrors && fallbackState.voiceErrors.length) {
+          handleVoiceErrors(fallbackState.voiceErrors);
+          fallbackState.voiceErrors = [];
+        }
         if (recording) recChunks.push(new Float32Array(L));
         const disp = fallbackState.display;
         if (disp && fallbackState.dispIdx >= disp[0].length) {
@@ -699,14 +746,16 @@
         }
       };
       node = sp;
+      showError('提示：当前浏览器不支持 AudioWorklet，已使用兼容模式（性能较低，推荐 Chrome / Edge / Firefox）');
     }
 
     node.connect(masterGain);
+    masterGain.connect(compNode);
     if (panNode) {
-      masterGain.connect(panNode);
+      compNode.connect(panNode);
       panNode.connect(analyser);
     } else {
-      masterGain.connect(analyser);
+      compNode.connect(analyser);
     }
     analyser.connect(spectrumAnalyser);
     spectrumAnalyser.connect(ctx.destination);
@@ -732,6 +781,7 @@
   function compileCheck(src) {
     const s = (src || '').trim();
     if (!s) return { ok: false, err: '函数不能为空' };
+    if (/\b(for|while)\s*\(|\bdo\s*\{/.test(s)) return { ok: false, err: '不支持循环语句（for/while/do），函数必须立即返回' };
     try {
       const f = compileVoice(s);
       const test = f(0, 440, 1);
@@ -814,6 +864,13 @@
       });
     }
   }
+  function matchPreset(src) {
+    for (let p = 0; p < PRESETS.length; p++) {
+      if (PRESETS[p].code === src) return p;
+    }
+    return -1;
+  }
+
   function loadVoices(voiceDefs) {
     for (let i = 0; i < CHANNELS; i++) {
       const d = voiceDefs[i];
@@ -821,28 +878,42 @@
       v.enabled = !!d;
       v.source = d ? d.source : 'sin(TWO_PI * freq * t) * 0.2 * env';
       v.gain = d ? d.gain : 0.3;
+      v.error = '';
       v.el.src.value = v.source;
       v.el.gain.value = String(Math.round(v.gain * 100));
       v.el.gval.textContent = Math.round(v.gain * 100) + '%';
+      v.el.preset.value = String(matchPreset(v.source));
     }
     syncVoices();
   }
   function restoreVoices() {
-    if (!savedVoices) return;
+    if (!savedVoices) return true;
+    let changed = false;
+    for (let i = 0; i < CHANNELS; i++) {
+      const s = savedVoices[i];
+      const v = voices[i];
+      if (v.enabled !== s.enabled || v.gain !== s.gain || v.source !== s.source) { changed = true; break; }
+    }
+    if (changed && !window.confirm('停止播放将还原播放前的声部设置，播放期间的修改会丢失。\n确定停止并还原吗？')) {
+      return false;
+    }
     for (let i = 0; i < CHANNELS; i++) {
       const s = savedVoices[i];
       const v = voices[i];
       v.enabled = s.enabled; v.gain = s.gain; v.source = s.source;
+      v.error = '';
       v.el.src.value = v.source;
       v.el.gain.value = String(Math.round(v.gain * 100));
       v.el.gval.textContent = Math.round(v.gain * 100) + '%';
+      v.el.preset.value = String(matchPreset(v.source));
     }
     savedVoices = null;
     syncVoices();
+    return true;
   }
 
   async function startSong(song) {
-    if (songPlaying) stopSong();
+    if (songPlaying) { if (!stopSong()) return false; }
     saveVoices();
     if (seqRunning) {
       seqRunning = false;
@@ -862,15 +933,17 @@
     await ensureEngine();
     statusEl.textContent = '播放 ' + song.name;
     send({ type: 'resetTime' });
+    return true;
   }
 
   function stopSong() {
-    if (!songPlaying) return;
-    restoreVoices();
+    if (!songPlaying) return true;
+    if (!restoreVoices()) return false;
     songPlaying = false;
     demoBtn.textContent = '▶ 播放';
     demoBtn.classList.remove('on');
     stopEngine();
+    return true;
   }
 
   async function handleMidiFile(file) {
@@ -882,11 +955,11 @@
       const parsed = parseMidi(buf);
       const song = analyzeMidi(parsed, file.name);
       if (!song || !song.data.length) { showError('未在该 MIDI 中解析到音符'); return; }
-      if (song.data.length > 16) showError('通道数超过 16，已截断前 16 个');
-      currentSong = song;
       startSong(song);
     } catch (err) {
-      showError('导入失败：' + (err && err.message ? err.message : err));
+      const msg = err && err.message ? String(err.message) : String(err);
+      const friendly = /outside the bounds|RangeError/i.test(msg) ? 'MIDI 文件损坏或格式不完整' : msg;
+      showError('导入失败：' + friendly);
     }
   }
 
@@ -1193,30 +1266,45 @@
     return ((i % 16) + 16) % 16;
   }
 
+  let frameNo = 0;
   function draw() {
     requestAnimationFrame(draw);
-    sctx.fillStyle = 'rgba(2,7,4,0.24)';
-    sctx.fillRect(0, 0, scopeW, scopeH);
-    drawGrid();
-    if (analyser) {
-      if (scopeMode === 'wave') {
-        analyser.getFloatTimeDomainData(timeData);
-        drawWave();
-      } else {
-        spectrumAnalyser.getByteFrequencyData(freqData);
-        drawSpectrum();
+    frameNo++;
+    const active = running || audioPlaying || recording || seqRunning || tlPlaying;
+    if (active || (frameNo % 24 === 0)) {
+      sctx.fillStyle = 'rgba(2,7,4,0.24)';
+      sctx.fillRect(0, 0, scopeW, scopeH);
+      drawGrid();
+      if (analyser) {
+        if (scopeMode === 'wave') {
+          analyser.getFloatTimeDomainData(timeData);
+          drawWave();
+        } else {
+          spectrumAnalyser.getByteFrequencyData(freqData);
+          drawSpectrum();
+        }
+      }
+      if ((frameNo & 1) === 0) drawMulti();
+      drawAudioScopes();
+    }
+    freqReadout.textContent = songPlaying ? (SONG_BPM + ' BPM') : (displayFreq().toFixed(1) + ' Hz');
+
+    // 录音计时与时长上限
+    if (recording && recStartWall) {
+      recordBtn.textContent = '■ 停止录制 ' + formatTime((performance.now() - recStartWall) / 1000);
+      if (performance.now() - recStartWall >= MAX_REC_MS) {
+        showError('录音已达 ' + Math.round(MAX_REC_MS / 60000) + ' 分钟上限，已自动停止并导出');
+        stopRecording();
       }
     }
-    drawMulti();
-    drawAudioScopes();
-    freqReadout.textContent = songPlaying ? (SONG_BPM + ' BPM') : (displayFreq().toFixed(1) + ' Hz');
 
     // 时间线播放头
     if (tlPlaying) {
       if (!songPlaying) {
         tlPlaying = false;
+        setTimelineLock(false);
         if (tlPlayheadEl) tlPlayheadEl.style.display = 'none';
-      } else if (tlPlayheadEl) {
+      } else if (tlPlayheadEl && !tlStarting) {
         const tlBeats = (performance.now() - tlStartWall) / 1000 * tlBpm / 60;
         const tlPos = (tlBeats % (tlBars * 4)) * TL_PX_PER_BEAT;
         tlPlayheadEl.style.display = 'block';
@@ -1258,6 +1346,11 @@
         o.textContent = PRESETS[p].name;
         preset.appendChild(o);
       }
+      const customOpt = document.createElement('option');
+      customOpt.value = '-1';
+      customOpt.textContent = '自定义';
+      preset.appendChild(customOpt);
+      preset.value = String(matchPreset(def.source));
 
       const src = document.createElement('input');
       src.type = 'text';
@@ -1298,16 +1391,19 @@
           syncVoices();
         });
         preset.addEventListener('change', function () {
-          vi.source = PRESETS[parseInt(preset.value, 10)].code;
-          vi.el.src.value = vi.source;
-          syncVoices();
+          const p = parseInt(preset.value, 10);
+          if (p >= 0 && PRESETS[p]) {
+            vi.source = PRESETS[p].code;
+            vi.el.src.value = vi.source;
+            syncVoices();
+          }
         });
         src.addEventListener('input', function () { vi.source = src.value; });
         src.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); syncVoices(); } });
         gain.addEventListener('input', function () {
           vi.gain = parseFloat(gain.value) / 100;
           gval.textContent = gain.value + '%';
-          send({ type: 'voice', index: idx, gain: vi.gain, enabled: vi.enabled });
+          send({ type: 'voice', index: idx, gain: vi.gain, enabled: vi.enabled && !vi.error });
         });
       })(v, i);
     }
@@ -1391,7 +1487,7 @@
       lane.style.left = TL_HEAD_W + 'px';
       lane.style.width = tlLanePx() + 'px';
       lane.style.height = TL_ROW_H + 'px';
-      lane.addEventListener('mousedown', (function (ch) {
+      lane.addEventListener('pointerdown', (function (ch) {
         return function (e) {
           if (e.target !== lane) return;
           e.preventDefault();
@@ -1433,10 +1529,10 @@
         const sel = tlSelected && tlSelected.ch === i && tlSelected.idx === k;
         div.className = 'tl-note' + (sel ? ' selected' : '');
         div.style.left = (n.start * TL_PX_PER_BEAT) + 'px';
-        div.style.width = Math.max(6, n.dur * TL_PX_PER_BEAT - 2) + 'px';
+        div.style.width = Math.max(10, n.dur * TL_PX_PER_BEAT - 2) + 'px';
         div.textContent = midiName(n.midi);
         div.title = midiName(n.midi) + ' · 第' + (n.start + 1).toFixed(2) + '拍 · 长' + n.dur.toFixed(2) + '拍';
-        div.addEventListener('mousedown', (function (ch, idx) { return function (e) { noteMouseDown(ch, idx, e); }; })(i, k));
+        div.addEventListener('pointerdown', (function (ch, idx) { return function (e) { noteMouseDown(ch, idx, e); }; })(i, k));
         lane.appendChild(div);
       }
     }
@@ -1448,24 +1544,32 @@
     const isResize = (e.offsetX >= e.target.offsetWidth - 8);
     selectNote(ch, idx);
     const note = tlNotes[ch][idx];
+    const lane = tlLanes[ch];
+    const el = lane.querySelectorAll('.tl-note')[idx] || e.target;
     const startX = e.clientX;
     const origStart = note.start;
     const origDur = note.dur;
+    const maxBeats = tlBars * 4;
+    try { el.setPointerCapture(e.pointerId); } catch (err) {}
     function onMove(ev) {
       const dx = (ev.clientX - startX) / TL_PX_PER_BEAT;
       if (isResize) {
-        note.dur = Math.max(0.25, Math.round((origDur + dx) * 4) / 4);
+        note.dur = Math.min(maxBeats - note.start, Math.max(0.25, Math.round((origDur + dx) * 4) / 4));
+        el.style.width = Math.max(10, note.dur * TL_PX_PER_BEAT - 2) + 'px';
       } else {
-        note.start = Math.max(0, Math.round((origStart + dx) * 4) / 4);
+        note.start = Math.max(0, Math.min(maxBeats - note.dur, Math.round((origStart + dx) * 4) / 4));
+        el.style.left = (note.start * TL_PX_PER_BEAT) + 'px';
       }
-      renderTimelineNotes();
     }
     function onUp() {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      renderTimelineNotes();
     }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
   }
 
   function selectNote(ch, idx) {
@@ -1513,16 +1617,34 @@
     return { data: data, len: tlBars * 4 * ppq, bpm: tlBpm, ppq: ppq, voices: voices, name: '时间线' };
   }
 
-  function playTimeline() {
+  function setTimelineLock(locked) {
+    tlBpmEl.disabled = locked;
+    tlBarsEl.disabled = locked;
+  }
+
+  async function playTimeline() {
     tlPlaying = true;
+    tlStarting = true;
+    setTimelineLock(true);
+    let ok = false;
+    try {
+      ok = await startSong(buildTimelineSong());
+    } finally {
+      tlStarting = false;
+    }
+    if (!ok) {
+      tlPlaying = false;
+      setTimelineLock(false);
+      return;
+    }
     tlStartWall = performance.now();
-    startSong(buildTimelineSong());
   }
 
   function stopTimeline() {
+    if (!stopSong()) return;
     tlPlaying = false;
+    setTimelineLock(false);
     if (tlPlayheadEl) tlPlayheadEl.style.display = 'none';
-    stopSong();
   }
 
   /* ---------- 音频播放器（导入 wav/mp3/flac） ---------- */
@@ -1581,8 +1703,11 @@
     if (!/\.(wav|mp3|flac|ogg|m4a|aac|webm)$/.test(name)) { showError('请选择 WAV / MP3 / FLAC 等音频文件'); return; }
     if (audioPlaying) { audioEl.pause(); audioPlaying = false; audioPlayBtn.textContent = '▶ 播放'; }
     const url = URL.createObjectURL(file);
+    const oldUrl = audioEl.dataset.url;
     audioEl.src = url;
     audioEl.load();
+    if (oldUrl) { try { URL.revokeObjectURL(oldUrl); } catch (err) {} }
+    audioEl.dataset.url = url;
     audioLoaded = true;
     await ensureAudioGraph();
     audioSeek.value = '0';
@@ -1698,6 +1823,7 @@
 
   function bindKey(el, midi) {
     el.addEventListener('pointerdown', function (e) { e.preventDefault(); noteOn(midi); });
+    el.addEventListener('pointerenter', function (e) { if (e.buttons & 1) noteOn(midi); });
     el.addEventListener('pointerup', function () { noteOff(midi); });
     el.addEventListener('pointerleave', function () { noteOff(midi); });
     el.addEventListener('pointercancel', function () { noteOff(midi); });
@@ -1747,7 +1873,7 @@
   const pressedKeys = {};
   window.addEventListener('keydown', function (e) {
     const t = e.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.tagName === 'BUTTON' || t.isContentEditable)) return;
     if (e.key === 'Delete') { e.preventDefault(); deleteSelectedNote(); return; }
     if (e.key === 'Backspace' && tlSelected) { e.preventDefault(); deleteSelectedNote(); return; }
     if (e.code === 'Space') {
@@ -1770,7 +1896,10 @@
     pressedKeys[k] = false;
     noteOff(KEYMAP[k]);
   });
-  window.addEventListener('blur', allNotesOff);
+  window.addEventListener('blur', function () {
+    allNotesOff();
+    for (const k in pressedKeys) pressedKeys[k] = false;
+  });
 
   /* ---------- 录制导出 ---------- */
   recordBtn.addEventListener('click', async function () {
@@ -1779,33 +1908,48 @@
     if (!recording) {
       recChunks = [];
       recording = true;
+      recStartWall = performance.now();
       recordBtn.textContent = '■ 停止录制';
       send({ type: 'record', on: true });
     } else {
-      recording = false;
-      recordBtn.textContent = '● 录制';
-      send({ type: 'record', on: false });
-      exportWav();
+      await stopRecording();
     }
   });
 
-  function exportWav() {
+  async function stopRecording() {
+    if (!recording) return;
+    recording = false;
+    recStartWall = 0;
+    recordBtn.textContent = '● 录制';
+    send({ type: 'record', on: false });
+    await exportWav();
+  }
+
+  async function exportWav() {
     let total = 0;
     recChunks.forEach(function (c) { total += c.length; });
     if (total === 0) { showError('没有录制到任何音频'); return; }
     const samples = new Float32Array(total);
     let off = 0;
     recChunks.forEach(function (c) { samples.set(c, off); off += c.length; });
-    const blob = encodeWav(samples, ctx.sampleRate);
-    const url = URL.createObjectURL(blob);
-    downloadLink.href = url;
-    downloadLink.download = 'synth-' + Date.now() + '.wav';
     downloadLink.hidden = false;
-    downloadLink.textContent = '⬇ 下载 WAV';
+    downloadLink.textContent = '⏳ 编码中…';
+    try {
+      const buffer = await encodeWavAsync(samples, ctx.sampleRate);
+      const blob = new Blob([buffer], { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+      if (downloadLink.dataset.url) { try { URL.revokeObjectURL(downloadLink.dataset.url); } catch (err) {} }
+      downloadLink.dataset.url = url;
+      downloadLink.href = url;
+      downloadLink.download = 'synth-' + Date.now() + '.wav';
+      downloadLink.textContent = '⬇ 下载 WAV';
+    } catch (err) {
+      downloadLink.hidden = true;
+      showError('导出失败：' + (err && err.message ? err.message : err));
+    }
   }
 
-  function encodeWav(samples, sampleRate) {
-    const numChannels = 1;
+  function encodeWavBuffer(samples, sampleRate) {
     const bytesPerSample = 2;
     const buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
     const view = new DataView(buffer);
@@ -1818,10 +1962,10 @@
     writeStr(12, 'fmt ');
     view.setUint32(16, 16, true);
     view.setUint16(20, 1, true);
-    view.setUint16(22, numChannels, true);
+    view.setUint16(22, 1, true);
     view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
-    view.setUint16(32, numChannels * bytesPerSample, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
     view.setUint16(34, 16, true);
     writeStr(36, 'data');
     view.setUint32(40, samples.length * bytesPerSample, true);
@@ -1831,12 +1975,69 @@
       view.setInt16(off2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
       off2 += 2;
     }
-    return new Blob([buffer], { type: 'audio/wav' });
+    return buffer;
+  }
+
+  const WAV_WORKER_SRC = [
+    'self.onmessage = function (e) {',
+    '  var samples = new Float32Array(e.data.samples);',
+    '  var sampleRate = e.data.sampleRate;',
+    '  var bytesPerSample = 2;',
+    '  var buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);',
+    '  var view = new DataView(buffer);',
+    '  function wstr(o, s) { for (var i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); }',
+    '  wstr(0, "RIFF");',
+    '  view.setUint32(4, 36 + samples.length * bytesPerSample, true);',
+    '  wstr(8, "WAVE"); wstr(12, "fmt ");',
+    '  view.setUint32(16, 16, true);',
+    '  view.setUint16(20, 1, true);',
+    '  view.setUint16(22, 1, true);',
+    '  view.setUint32(24, sampleRate, true);',
+    '  view.setUint32(28, sampleRate * 2, true);',
+    '  view.setUint16(32, 2, true);',
+    '  view.setUint16(34, 16, true);',
+    '  wstr(36, "data");',
+    '  view.setUint32(40, samples.length * bytesPerSample, true);',
+    '  var off = 44;',
+    '  for (var i = 0; i < samples.length; i++) {',
+    '    var s = samples[i]; if (s > 1) s = 1; else if (s < -1) s = -1;',
+    '    view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);',
+    '    off += 2;',
+    '  }',
+    '  self.postMessage(buffer, [buffer]);',
+    '};'
+  ].join('\n');
+
+  function encodeWavAsync(samples, sampleRate) {
+    return new Promise(function (resolve, reject) {
+      let worker = null;
+      let url = null;
+      try {
+        url = URL.createObjectURL(new Blob([WAV_WORKER_SRC], { type: 'text/javascript' }));
+        worker = new Worker(url);
+      } catch (err) {
+        resolve(encodeWavBuffer(samples, sampleRate));
+        return;
+      }
+      worker.onmessage = function (e) {
+        worker.terminate();
+        URL.revokeObjectURL(url);
+        resolve(e.data);
+      };
+      worker.onerror = function () {
+        worker.terminate();
+        URL.revokeObjectURL(url);
+        reject(new Error('WAV 编码失败'));
+      };
+      worker.postMessage({ samples: samples.buffer, sampleRate: sampleRate }, [samples.buffer]);
+    });
   }
 
   /* ---------- 控件事件 ---------- */
   playBtn.addEventListener('click', function () {
-    if (running) stopEngine(); else ensureEngine();
+    if (songPlaying) stopSong();
+    else if (running) stopEngine();
+    else ensureEngine();
   });
 
   demoBtn.addEventListener('click', function () {
@@ -1921,6 +2122,11 @@
   tlBarsEl.addEventListener('input', function () {
     tlBars = parseFloat(tlBarsEl.value);
     tlBarsVal.textContent = tlBars + ' 小节';
+    const maxBeats = tlBars * 4;
+    for (let i = 0; i < CHANNELS; i++) {
+      tlNotes[i] = tlNotes[i].filter(function (n) { return n.start + n.dur <= maxBeats + 1e-6; });
+    }
+    tlSelected = null;
     buildTimelineUI();
   });
   tlPitchEl.addEventListener('change', function () {
@@ -1948,9 +2154,14 @@
     if (!ctx) return;
     if (ctx.state === 'suspended') ctx.resume();
     if (audioEl.paused) {
-      audioEl.play().catch(function () {});
-      audioPlaying = true;
-      audioPlayBtn.textContent = '⏸ 暂停';
+      audioEl.play().then(function () {
+        audioPlaying = true;
+        audioPlayBtn.textContent = '⏸ 暂停';
+      }).catch(function () {
+        audioPlaying = false;
+        audioPlayBtn.textContent = '▶ 播放';
+        showError('音频播放失败：浏览器可能不支持该格式');
+      });
     } else {
       audioEl.pause();
       audioPlaying = false;
@@ -1978,6 +2189,8 @@
   audioSeek.addEventListener('pointerdown', function () { audioSeeking = true; });
   audioSeek.addEventListener('pointerup', function () { audioSeeking = false; });
   audioSeek.addEventListener('change', function () { audioSeeking = false; });
+  window.addEventListener('pointerup', function () { audioSeeking = false; });
+  window.addEventListener('pointercancel', function () { audioSeeking = false; });
   audioSeek.addEventListener('input', function () {
     if (audioEl && audioEl.duration) {
       audioEl.currentTime = audioEl.duration * parseFloat(audioSeek.value) / 1000;
