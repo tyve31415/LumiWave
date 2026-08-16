@@ -352,7 +352,7 @@ function createWindow() {
 
     // 0. 入口模块装载（若页面脚本失败，这里给出具体错误）
     probe('main-module',
-      'import("./main.js").then(function(){ return { ok: true, sin: typeof window.sin, voices: document.querySelectorAll(".voice").length, strips: document.querySelectorAll(".channel-strip").length }; }).catch(function(err){ return { ok: false, err: String((err && err.message) || err) }; })'
+      'import("./main.js").then(function(){ return { ok: true, sin: typeof window.sin, voices: document.querySelectorAll(".voice").length, strips: document.querySelectorAll(".channel-strip").length }; }).catch(function(err){ return { ok: false, err: String((err && err.message) || err), stack: String((err && err.stack) || "") }; })'
     ).then(function () {
       // 1. UI 结构
       return probe('renderer',
@@ -361,7 +361,7 @@ function createWindow() {
     }).then(function () {
       // 1.5. 布局结构：窗口几何 / 示波器画布尺寸 / 缩放热区
       return probe('layout',
-        '({ desktop: (function(){ var d = document.getElementById("desktop").getBoundingClientRect(); return { w: Math.round(d.width), h: Math.round(d.height) }; })(), wins: (function(){ var out = []; document.querySelectorAll(".win").forEach(function(w){ if (w.style.display === "none") return; var r = w.getBoundingClientRect(); out.push({ id: w.dataset.win, x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }); }); return out; })(), scope: (function(){ var c = document.getElementById("scope"); return { w: c.clientWidth, h: c.clientHeight }; })(), rsHandles: document.querySelectorAll(".rs").length, taskBtns: document.querySelectorAll(".task-btn").length })'
+        '({ desktop: (function(){ var d = document.getElementById("desktop").getBoundingClientRect(); return { w: Math.round(d.width), h: Math.round(d.height) }; })(), wins: (function(){ var out = []; document.querySelectorAll(".win").forEach(function(w){ if (w.style.display === "none") return; var r = w.getBoundingClientRect(); out.push({ id: w.dataset.win, x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }); }); return out; })(), scope: (function(){ var c = document.getElementById("scope"); return { w: c.clientWidth, h: c.clientHeight }; })(), rsHandles: document.querySelectorAll(".rs").length, menuItems: document.querySelectorAll(".win-menu-item").length })'
       );
     }).then(function () {
       // 1.8. VS Code 式窗口逻辑：锁定 / 悬浮拖动 / 分屏停靠 / 磁吸 / 无重叠 + 左列固定栏 + 顶栏弹出层
@@ -414,8 +414,8 @@ function createWindow() {
         '  var detached = !d2.wins.timeline.dock;' +
         '  var ovAfterMove = ovInternal(d2);' +
         '  var fixedStable = (d2.wins.explorer.x === ex0.x && d2.wins.explorer.y === ex0.y && d2.wins.explorer.w === ex0.w && d2.wins.explorer.h === ex0.h);' +
-        // 3) 弹出层（通道控制）：顶栏按钮弹出、置顶覆盖、无锁/无缩放热区、点击外部收起、再点收起
-        '  var chBtn = document.querySelector(".task-btn[data-task=channels]");' +
+        // 3) 弹出层（通道控制）：窗口菜单弹出、置顶覆盖、默认解锁可自由拖动、点击外部收起、再点收起
+        '  var chBtn = document.querySelector(".win-menu-item[data-task=channels]");' +
         '  chBtn.click();' +
         '  await settle(80);' +
         '  var dP = m._debugState();' +
@@ -423,7 +423,8 @@ function createWindow() {
         '  var popupCentered = Math.abs((dP.canvas.w - dP.wins.channels.w) / 2 - dP.wins.channels.x) <= 2 && dP.wins.channels.y <= 60;' +
         '  var popupOnTop = (function(){ var cw = document.querySelector(".win[data-win=channels]"); return getComputedStyle(cw).zIndex === "1200"; })();' +
         '  var popupNoHandles = !document.querySelector(".win[data-win=channels] .rs");' +
-        '  var popupNoLock = !document.querySelector(".win[data-win=channels] .win-lock");' +
+        '  var popupHasLock = !!document.querySelector(".win[data-win=channels] .win-lock");' +
+        '  var popupUnlocked = document.querySelector(".win[data-win=channels]").classList.contains("unlocked");' +
         '  document.getElementById("desktop").dispatchEvent(new PointerEvent("pointerdown", { clientX: 700, clientY: 700, bubbles: true }));' +
         '  await settle(80);' +
         '  var dP2 = m._debugState();' +
@@ -432,15 +433,24 @@ function createWindow() {
         '  await settle(80);' +
         '  var dP3 = m._debugState();' +
         '  var popupReopen = dP3.wins.channels.visible === true;' +
+        // 3.1) 自由拖动：拖动弹出层标题栏 → 位置改变（允许覆盖在其他窗口上）
+        '  var cwEl = document.querySelector(".win[data-win=channels]");' +
+        '  var cwBar = cwEl.querySelector(".win-bar");' +
+        '  pe(cwBar, "pointerdown", 620, 70);' +
+        '  pe(document, "pointermove", 820, 370);' +
+        '  pe(document, "pointerup", 820, 370);' +
+        '  await settle(120);' +
+        '  var dP5 = m._debugState();' +
+        '  var popupMoved = (Math.abs(dP5.wins.channels.x - dP3.wins.channels.x) > 80 && Math.abs(dP5.wins.channels.y - dP3.wins.channels.y) > 80);' +
         '  chBtn.click();' +
         '  await settle(80);' +
         '  var dP4 = m._debugState();' +
         '  var popupToggleHide = dP4.wins.channels.visible === false;' +
-        '  document.querySelector(".task-btn[data-act=arrange]").click();' +
+        '  document.querySelector(".win-menu-arrange").click();' +
         '  await settle(150);' +
         '  var d3 = m._debugState();' +
         '  var visCount = 0; for (var k in d3.wins) if (d3.wins[k].visible) visCount++;' +
-        '  return { locks: locks, unlocked: unlocked, handleVisible: handleVisible, noLockBtn: noLockBtn, fixedStillLocked: fixedStillLocked, fixedNoHandles: fixedNoHandles, leftCol: leftCol, fixedStable: fixedStable, docked: docked, badge: badgeEl ? badgeEl.textContent : null, scopeShrunk: scopeShrunk, overlapsAfterDock: ovAfterDock, moved: moved, detached: detached, overlapsAfterMove: ovAfterMove, popupShown: popupShown, popupCentered: popupCentered, popupOnTop: popupOnTop, popupNoHandles: popupNoHandles, popupNoLock: popupNoLock, popupClosedOutside: popupClosedOutside, popupReopen: popupReopen, popupToggleHide: popupToggleHide, overlapsAfterArrange: ovInternal(d3), visibleCount: visCount };' +
+        '  return { locks: locks, unlocked: unlocked, handleVisible: handleVisible, noLockBtn: noLockBtn, fixedStillLocked: fixedStillLocked, fixedNoHandles: fixedNoHandles, leftCol: leftCol, fixedStable: fixedStable, docked: docked, badge: badgeEl ? badgeEl.textContent : null, scopeShrunk: scopeShrunk, overlapsAfterDock: ovAfterDock, moved: moved, detached: detached, overlapsAfterMove: ovAfterMove, popupShown: popupShown, popupCentered: popupCentered, popupOnTop: popupOnTop, popupNoHandles: popupNoHandles, popupHasLock: popupHasLock, popupUnlocked: popupUnlocked, popupClosedOutside: popupClosedOutside, popupReopen: popupReopen, popupMoved: popupMoved, popupToggleHide: popupToggleHide, overlapsAfterArrange: ovInternal(d3), visibleCount: visCount };' +
         '})()'
       );
     }).then(function () {
