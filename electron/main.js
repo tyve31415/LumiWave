@@ -1,5 +1,5 @@
 /* =========================================================
-   示波器合成器 · Electron 主进程
+   LumiWave · Electron 主进程
    职责：窗口管理、原生菜单、文件对话框、最近文件、
         窗口状态持久化、防 CPU 节流、IPC 路由
    ========================================================= */
@@ -271,9 +271,9 @@ function rebuildMenu() {
 function showAbout() {
   dialog.showMessageBox(mainWindow, {
     type: 'info',
-    title: '关于 示波器合成器',
-    message: '示波器合成器 · Oscilloscope Synth',
-    detail: '16 声部芯片音乐合成器：公式波形合成 + 多通道示波器 + MIDI 导入 + 时间线编辑器\n\nElectron ' + process.versions.electron + ' · Chromium ' + process.versions.chrome + ' · Node ' + process.versions.node,
+    title: '关于 LumiWave',
+    message: 'LumiWave · 示波器合成器',
+    detail: '16 声部芯片音乐合成器：公式波形合成 + CH1–CH4 大通道路由 + MIDI 导入 + 时间线编辑器\n\nElectron ' + process.versions.electron + ' · Chromium ' + process.versions.chrome + ' · Node ' + process.versions.node,
     buttons: ['好的']
   });
 }
@@ -301,7 +301,7 @@ function createWindow() {
     minHeight: 620,
     show: false,
     backgroundColor: '#010402',
-    title: '示波器合成器 · Oscilloscope Synth',
+    title: 'LumiWave · 示波器合成器',
     autoHideMenuBar: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -561,7 +561,7 @@ function registerIpc() {
     if (!ensureSender(event) || !payload || !payload.data) return { ok: false };
     const r = await dialog.showSaveDialog(mainWindow, {
       title: '导出 WAV 音频',
-      defaultPath: payload.suggestedName || 'synth.wav',
+      defaultPath: payload.suggestedName || 'lumiwave.wav',
       filters: [{ name: 'WAV 音频', extensions: ['wav'] }]
     });
     if (r.canceled || !r.filePath) return { ok: false, canceled: true };

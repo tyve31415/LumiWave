@@ -149,7 +149,7 @@ export class SynthEngine {
     if (this.node || !ctx) return;
     if (typeof AudioWorkletNode === 'function') {
       try {
-        const name = 'synth-' + this.id;
+        const name = 'lumiwave-' + this.id;
         const src = buildWorkletSource(name, {
           collectDisplay: this.collectDisplay,
           gateMode: this.gateMode,
@@ -461,7 +461,7 @@ export async function startMainSong(song) {
   el.demoBtn.textContent = '■ 停止';
   el.demoBtn.classList.add('on');
   el.status.textContent = '播放 ' + song.name;
-  document.title = '示波器合成器 · ' + song.name;
+  document.title = 'LumiWave · ' + song.name;
   return true;
 }
 
@@ -470,7 +470,7 @@ export function stopMainSong() {
   if (!mainEngine.stopSong()) return false;
   el.demoBtn.textContent = '▶ 播放';
   el.demoBtn.classList.remove('on');
-  document.title = '示波器合成器 · Oscilloscope Synth';
+  document.title = 'LumiWave · 示波器合成器';
   return true;
 }
 

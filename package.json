@@ -1,10 +1,10 @@
 {
-  "name": "oscilloscope-synth",
-  "productName": "示波器合成器",
+  "name": "lumiwave",
+  "productName": "LumiWave",
   "version": "2.0.0",
-  "description": "示波器合成器 · Oscilloscope Synth —— Electron 桌面版芯片音乐合成器（16 声部混音 + 示波器 + MIDI 导入 + 时间线编辑器）",
+  "description": "LumiWave · 芯片音乐示波器合成器 —— Electron 桌面版（16 声部混音 + CH1–CH4 大通道路由 + MIDI 导入 + 时间线编辑器）",
   "main": "electron/main.js",
-  "author": "Oscilloscope Synth",
+  "author": "LumiWave",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
@@ -18,8 +18,8 @@
     "electron-builder": "^26.0.0"
   },
   "build": {
-    "appId": "com.oscilloscopesynth.app",
-    "productName": "示波器合成器",
+    "appId": "com.lumiwave.app",
+    "productName": "LumiWave",
     "asar": true,
     "files": [
       "electron/**/*",
@@ -45,7 +45,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "示波器合成器"
+      "shortcutName": "LumiWave"
     }
   }
 }

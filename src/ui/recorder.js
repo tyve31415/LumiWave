@@ -163,7 +163,7 @@ async function exportWav() {
 
   try {
     const buffer = await encodeWavAsync(samples, ctx.sampleRate);
-    const fileName = 'synth-' + Date.now() + '.wav';
+    const fileName = 'lumiwave-' + Date.now() + '.wav';
 
     // 原生「另存为」对话框
     const result = await desktop.saveFile({ data: buffer, suggestedName: fileName });
