@@ -48,7 +48,9 @@ function refreshChannelUI() {
 
     const chip = el.chLegend.querySelector('[data-ch="' + d.id + '"]');
     if (chip) {
+      // 开 = 高亮选中；关 = 暗化（再次单击关闭）
       chip.classList.toggle('off', !s.on);
+      chip.classList.toggle('on', s.on);
       chip.classList.toggle('solo', s.route === 'solo');
       chip.title = d.code
         + ' · ' + (s.on ? '开' : '关')

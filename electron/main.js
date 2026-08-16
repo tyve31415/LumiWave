@@ -512,7 +512,7 @@ function createWindow() {
         '})'
       );
     }).then(function () {
-      // 2.8. 示波器视图切换：默认 4 个独立通道，顶部按钮切换为单个 MIX 通道
+      // 2.8. 示波器视图切换：默认 4 个独立通道，顶部按钮切换为单个 MIX 通道（叠加 4 通道同一基准线）
       return probe('scope-mix',
         'import("./ui/scope.js").then(function (s) {' +
         '  var btn = document.getElementById("mixToggle");' +
@@ -521,7 +521,14 @@ function createWindow() {
         '  var on = s.scopeState.view === "mix" && btn.classList.contains("on") && btn.textContent === "4CH";' +
         '  btn.click();' +
         '  var off = s.scopeState.view === "channels" && !btn.classList.contains("on");' +
-        '  return { btn: !!btn, initial: initial, toggleOn: on, toggleOff: off };' +
+        '  var chip1 = document.querySelector(".win-bar .ch-chip[data-ch=ch1]");' +
+        '  if (chip1.classList.contains("off")) chip1.click();' +
+        '  var wasOn = chip1.classList.contains("on") && !chip1.classList.contains("off");' +
+        '  chip1.click();' +
+        '  var toggledOff = chip1.classList.contains("off") && !chip1.classList.contains("on");' +
+        '  chip1.click();' +
+        '  var toggledBack = chip1.classList.contains("on") && !chip1.classList.contains("off");' +
+        '  return { btn: !!btn, initial: initial, toggleOn: on, toggleOff: off, chipWasOn: wasOn, chipToggledOff: toggledOff, chipToggledBack: toggledBack };' +
         '})'
       );
     }).then(function () {

@@ -160,22 +160,47 @@ function drawChannelLanes() {
   }
 }
 
-/** MIX 单窗口视图：混合输出波形占满整个示波器（亮绿双描边） */
+/** MIX 单窗口视图：MIX 与 4 个通道波形叠加在同一基准线上（不分栏） */
 function drawMixSingle() {
   if (!analyser) return;
-  const p = scopeState.params.mix;
   const w = scopeState.w, h = scopeState.h;
   const mid = h / 2;
-  const amp = h * p.amp;
+
+  // 4 个通道波形（顶部通道按钮控制开闭；参数按通道独立，幅度与分栏视图同比例）
+  for (let i = 0; i < CH_DEFS.length; i++) {
+    const d = CH_DEFS[i];
+    const s = chState[d.id];
+    if (!s.on) continue;
+    const td = getChannelTimeData(d.id);
+    if (!td) continue;
+    const p = scopeState.params[d.id];
+    readChannelTimeData(d.id);
+    const n = Math.min(p.samples, 2048);
+    const amp = laneAmp(h / 4, p);
+    sctx.save();
+    sctx.strokeStyle = d.color;
+    sctx.globalAlpha = 0.72;
+    sctx.lineWidth = 1.1;
+    sctx.lineCap = 'round';
+    sctx.lineJoin = 'round';
+    sctx.beginPath();
+    for (let k = 0; k < n; k++) {
+      const x = (k / (n - 1)) * w;
+      const y = mid - td[k] * amp;
+      if (k === 0) sctx.moveTo(x, y); else sctx.lineTo(x, y);
+    }
+    sctx.stroke();
+    sctx.restore();
+  }
+
+  // MIX 波形（亮绿双描边，最上层）
+  const pm = scopeState.params.mix;
   analyser.getFloatTimeDomainData(timeData);
-  const n = Math.min(p.samples, timeData.length);
+  const n = Math.min(pm.samples, timeData.length);
   const start = Math.floor((timeData.length - n) / 2);
+  const amp = h * pm.amp;
 
   sctx.save();
-  sctx.font = '10px monospace';
-  sctx.textBaseline = 'top';
-  sctx.fillStyle = '#eafff2';
-  sctx.fillText('MIX 混合输出', 6, 6);
   sctx.lineCap = 'round';
   sctx.lineJoin = 'round';
   // 第一遍：宽、半透明（光晕）
@@ -198,6 +223,14 @@ function drawMixSingle() {
     if (i === 0) sctx.moveTo(x, y); else sctx.lineTo(x, y);
   }
   sctx.stroke();
+  sctx.restore();
+
+  // 标签
+  sctx.save();
+  sctx.font = '10px monospace';
+  sctx.textBaseline = 'top';
+  sctx.fillStyle = '#eafff2';
+  sctx.fillText('MIX + CH1–CH4 · 同一基准线', 6, 6);
   sctx.restore();
 }
 
@@ -230,8 +263,9 @@ function drawWave() {
 }
 
 /* ---------- 频谱绘制 ---------- */
-function drawSpecBand(label, color, data, y0, bh, p) {
+function drawSpecBand(label, color, data, y0, bh, p, alpha) {
   const w = scopeState.w;
+  const a = typeof alpha === 'number' ? alpha : 0.9;
   sctx.save();
   sctx.fillStyle = color;
   const sr = ctx ? ctx.sampleRate : 44100;
@@ -254,23 +288,34 @@ function drawSpecBand(label, color, data, y0, bh, p) {
     }
     const v = peak / 255;
     const hh = Math.pow(v, 0.75) * bh * 0.92 * p.specAmp;
-    sctx.globalAlpha = 0.9;
+    sctx.globalAlpha = a;
     sctx.fillRect(k * bw, y0 + bh - hh, Math.max(1, bw - 1), hh);
   }
   sctx.globalAlpha = 1;
-  sctx.font = '10px monospace';
-  sctx.textBaseline = 'top';
-  sctx.fillText(label, 6, y0 + 3);
+  if (label) {
+    sctx.font = '10px monospace';
+    sctx.textBaseline = 'top';
+    sctx.fillText(label, 6, y0 + 3);
+  }
   sctx.restore();
 }
 
 function drawSpectrum() {
   if (!ctx) return;
-  // MIX 单窗口视图：混合频谱占满整个示波器
+  // MIX 单窗口视图：MIX 与 4 个通道频谱叠加在同一基准线上
   if (scopeState.view === 'mix') {
     if (spectrumAnalyser) {
+      for (let i = 0; i < CH_DEFS.length; i++) {
+        const d = CH_DEFS[i];
+        const s = chState[d.id];
+        if (!s.on) continue;
+        const fd = getChannelFreqData(d.id);
+        if (!fd) continue;
+        readChannelFreqData(d.id);
+        drawSpecBand('', d.color, fd, 0, scopeState.h, scopeState.params[d.id], 0.45);
+      }
       spectrumAnalyser.getByteFrequencyData(freqData);
-      drawSpecBand('MIX 混合输出', '#eafff2', freqData, 0, scopeState.h, scopeState.params.mix);
+      drawSpecBand('MIX + CH1–CH4', '#eafff2', freqData, 0, scopeState.h, scopeState.params.mix, 0.9);
     }
     drawSelectionBorder();
     return;
