@@ -1,8 +1,11 @@
 /* =========================================================
-   主示波器：4 通道示波器
+   主示波器：4 通道示波器（交互式通道选择）
    · 默认视图：CH1–CH4 各占一栏的独立彩色波形/频谱
    · 顶部 MIX 按钮：切换为「单个 MIX 通道」视图——
      混合输出波形/频谱占满整个示波器（单窗口显示）
+   · 单击某通道栏 → 该栏边框高亮选中；右侧旋钮（垂直/水平/
+     频幅/中心/带宽）调节选中通道（或 MIX）的波形与频谱参数
+   · 每个通道与 MIX 各自持有独立的一套参数
    性能优化：
    1. 网格静态层缓存到离屏画布，仅尺寸变化时重绘
    2. 波形辉光用「双描边」替代 shadowBlur（显著降低 GPU 开销）
@@ -17,17 +20,30 @@ import { SONG_BPM } from '../core/song.js';
 import { seqState } from './sequencer.js';
 import { clamp, TWO_PI, PI, midiToFreq } from '../core/math.js';
 
-export const scopeState = {
-  mode: 'wave',        // 'wave' | 'spectrum'
-  view: 'channels',    // 'channels'（4 个独立通道分栏）| 'mix'（单个 MIX 通道全屏）
+const PARAM_DEFAULTS = {
   amp: 0.24,
   samples: 2048,
   specAmp: 1.0,
   specCenter: 632.0,
-  specSpan: 20000.0,
+  specSpan: 20000.0
+};
+
+export const scopeState = {
+  mode: 'wave',        // 'wave' | 'spectrum'
+  view: 'channels',    // 'channels'（4 个独立通道分栏）| 'mix'（单个 MIX 通道全屏）
+  selected: 'ch1',     // 当前高亮选中的目标（ch1–ch4 或 mix），旋钮作用于它
+  params: {},          // 每个通道与 mix 各自独立的示波器参数
   w: 0,
   h: 0
 };
+for (const k of ['ch1', 'ch2', 'ch3', 'ch4', 'mix']) {
+  scopeState.params[k] = Object.assign({}, PARAM_DEFAULTS);
+}
+
+/** 当前选中目标的参数（旋钮读写入口） */
+function curParams() {
+  return scopeState.params[scopeState.selected] || scopeState.params.ch1;
+}
 
 /* ---------- 画布适配（供各模块复用） ---------- */
 export function fitCanvas(cv) {
@@ -89,7 +105,7 @@ export function resizeScope() {
   renderGridLayer();
 }
 
-/* ---------- 波形绘制（5 栏：CH1–CH4 + MIX） ---------- */
+/* ---------- 波形绘制 ---------- */
 function tracePath(data, n, w, amp, mid) {
   for (let i = 0; i < n; i++) {
     const x = (i / (n - 1)) * w;
@@ -98,21 +114,22 @@ function tracePath(data, n, w, amp, mid) {
   }
 }
 
-function laneAmp(laneH) {
-  return laneH * clamp(scopeState.amp * 2, 0.08, 2.6);
+function laneAmp(laneH, p) {
+  return laneH * clamp(p.amp * 2, 0.08, 2.6);
 }
 
-/** CH1–CH4：各占一栏的独立彩色波形（4 通道视图） */
+/** CH1–CH4：各占一栏的独立彩色波形（4 通道视图，参数按通道独立） */
 function drawChannelLanes() {
   const w = scopeState.w, h = scopeState.h;
   const laneH = h / 4;
-  const amp = laneAmp(laneH);
-  const n = Math.min(scopeState.samples, 2048);
   for (let i = 0; i < CH_DEFS.length; i++) {
     const d = CH_DEFS[i];
     const s = chState[d.id];
+    const p = scopeState.params[d.id];
     const y0 = i * laneH;
     const mid = y0 + laneH / 2;
+    const amp = laneAmp(laneH, p);
+    const n = Math.min(p.samples, 2048);
     // 栏标签（中性通道编号）
     sctx.save();
     sctx.font = '10px monospace';
@@ -141,11 +158,12 @@ function drawChannelLanes() {
 /** MIX 单窗口视图：混合输出波形占满整个示波器（亮绿双描边） */
 function drawMixSingle() {
   if (!analyser) return;
+  const p = scopeState.params.mix;
   const w = scopeState.w, h = scopeState.h;
   const mid = h / 2;
-  const amp = h * scopeState.amp;
+  const amp = h * p.amp;
   analyser.getFloatTimeDomainData(timeData);
-  const n = Math.min(scopeState.samples, timeData.length);
+  const n = Math.min(p.samples, timeData.length);
   const start = Math.floor((timeData.length - n) / 2);
 
   sctx.save();
@@ -178,20 +196,42 @@ function drawMixSingle() {
   sctx.restore();
 }
 
+/** 选中目标边框高亮（4 通道视图=选中栏；MIX 视图=整个窗口） */
+function drawSelectionBorder() {
+  const inMix = scopeState.view === 'mix';
+  const idx = inMix ? -1 : CH_DEFS.findIndex(function (d) { return d.id === scopeState.selected; });
+  const color = inMix ? '#eafff2' : (idx >= 0 ? CH_DEFS[idx].color : 'rgba(60,255,136,0.5)');
+  const y0 = inMix || idx < 0 ? 2.5 : idx * (scopeState.h / 4) + 2.5;
+  const bh = inMix || idx < 0 ? scopeState.h - 5 : scopeState.h / 4 - 5;
+  sctx.save();
+  sctx.lineJoin = 'round';
+  // 第一遍：宽、半透明（光晕）
+  sctx.strokeStyle = color;
+  sctx.globalAlpha = 0.3;
+  sctx.lineWidth = 5.5;
+  sctx.strokeRect(2.5, y0, scopeState.w - 5, bh);
+  // 第二遍：细、实心
+  sctx.globalAlpha = 0.95;
+  sctx.lineWidth = 1.6;
+  sctx.strokeRect(2.5, y0, scopeState.w - 5, bh);
+  sctx.restore();
+}
+
 function drawWave() {
   if (scopeState.view === 'mix') drawMixSingle();
   else drawChannelLanes();
+  drawSelectionBorder();
 }
 
-/* ---------- 频谱绘制（5 栏：CH1–CH4 + MIX） ---------- */
-function drawSpecBand(label, color, data, y0, bh) {
+/* ---------- 频谱绘制 ---------- */
+function drawSpecBand(label, color, data, y0, bh, p) {
   const w = scopeState.w;
   sctx.save();
   sctx.fillStyle = color;
   const sr = ctx ? ctx.sampleRate : 44100;
   const binHz = sr / (2 * data.length);
-  const fMin = Math.max(20, scopeState.specCenter - scopeState.specSpan / 2);
-  const fMax = Math.max(fMin + 20, Math.min(sr / 2, scopeState.specCenter + scopeState.specSpan / 2));
+  const fMin = Math.max(20, p.specCenter - p.specSpan / 2);
+  const fMax = Math.max(fMin + 20, Math.min(sr / 2, p.specCenter + p.specSpan / 2));
   const NB = 160;
   const logMin = Math.log(fMin);
   const logMax = Math.log(fMax);
@@ -207,7 +247,7 @@ function drawSpecBand(label, color, data, y0, bh) {
       if (data[i] > peak) peak = data[i];
     }
     const v = peak / 255;
-    const hh = Math.pow(v, 0.75) * bh * 0.92 * scopeState.specAmp;
+    const hh = Math.pow(v, 0.75) * bh * 0.92 * p.specAmp;
     sctx.globalAlpha = 0.9;
     sctx.fillRect(k * bw, y0 + bh - hh, Math.max(1, bw - 1), hh);
   }
@@ -224,8 +264,9 @@ function drawSpectrum() {
   if (scopeState.view === 'mix') {
     if (spectrumAnalyser) {
       spectrumAnalyser.getByteFrequencyData(freqData);
-      drawSpecBand('MIX 混合输出', '#eafff2', freqData, 0, scopeState.h);
+      drawSpecBand('MIX 混合输出', '#eafff2', freqData, 0, scopeState.h, scopeState.params.mix);
     }
+    drawSelectionBorder();
     return;
   }
   const laneH = scopeState.h / 4;
@@ -236,7 +277,7 @@ function drawSpectrum() {
     const fd = getChannelFreqData(d.id);
     if (fd && s.on) {
       readChannelFreqData(d.id);
-      drawSpecBand(d.code, d.color, fd, y0, laneH);
+      drawSpecBand(d.code, d.color, fd, y0, laneH, scopeState.params[d.id]);
     } else {
       // 关闭通道：仅保留栏标签
       sctx.save();
@@ -248,6 +289,7 @@ function drawSpectrum() {
       sctx.restore();
     }
   }
+  drawSelectionBorder();
 }
 
 /** 每帧调用（渲染循环已做空闲节流） */
@@ -268,15 +310,32 @@ export function toggleScopeMode() {
 }
 
 /** 顶部 MIX 开关：在「4 个独立通道」与「单个 MIX 通道」两种显示之间切换 */
+let lastChSelected = 'ch1';
+
 export function toggleMixView() {
   scopeState.view = scopeState.view === 'mix' ? 'channels' : 'mix';
   const inMix = scopeState.view === 'mix';
+  scopeState.selected = inMix ? 'mix' : lastChSelected;
   el.mixToggle.textContent = inMix ? '4CH' : 'MIX';
   el.mixToggle.classList.toggle('on', inMix);
   el.mixToggle.title = inMix
     ? '切换回 4 个独立通道显示'
     : '切换为单个 MIX 混合通道显示';
-  resizeScope(); // 视图变化 → 重算画布与网格
+  refreshKnobs();  // 旋钮指向新目标
+  resizeScope();   // 视图变化 → 重算画布与网格
+}
+
+/** 单击通道栏：选中并高亮，右侧旋钮开始作用于该通道 */
+export function selectScopeTarget(id) {
+  if (id === 'mix') {
+    scopeState.selected = 'mix';
+  } else {
+    for (let i = 0; i < CH_DEFS.length; i++) {
+      if (CH_DEFS[i].id === id) { lastChSelected = id; break; }
+    }
+    scopeState.selected = id;
+  }
+  refreshKnobs();
 }
 
 /* ---------- 频率读数 ---------- */
@@ -296,7 +355,7 @@ export function updateFreqReadout() {
   el.freqReadout.textContent = mainEngine.songPlaying ? (SONG_BPM + ' BPM') : (displayFreq().toFixed(1) + ' Hz');
 }
 
-/* ---------- 旋钮 ---------- */
+/* ---------- 旋钮（作用于当前选中通道/MIX 的参数） ---------- */
 function sizeKnob(cv) {
   const dpr = window.devicePixelRatio || 1;
   const css = Math.max(20, cv.clientWidth || 28);
@@ -331,6 +390,12 @@ function drawKnob(cv, v) {
   c.fillStyle = '#3cff88'; c.fill();
 }
 
+const knobRefreshers = [];
+
+function refreshKnobs() {
+  for (let i = 0; i < knobRefreshers.length; i++) knobRefreshers[i]();
+}
+
 function bindKnob(cv, opts) {
   let dragging = false;
   let lastY = 0;
@@ -339,6 +404,7 @@ function bindKnob(cv, opts) {
     drawKnob(cv, v);
     opts.paint();
   }
+  knobRefreshers.push(redraw);
   cv.addEventListener('pointerdown', function (e) {
     dragging = true;
     lastY = e.clientY;
@@ -371,32 +437,32 @@ export function initScopeKnobs() {
   [el.knobVert, el.knobHoriz, el.knobSpecAmp, el.knobCenter, el.knobSpan].forEach(sizeKnob);
 
   bindKnob(el.knobVert, {
-    get: function () { return Math.log(scopeState.amp / 0.05) / Math.log(3.0 / 0.05); },
-    set: function (v) { scopeState.amp = Math.round(0.05 * Math.pow(3.0 / 0.05, v) * 100) / 100; },
-    paint: function () { el.knobVertVal.textContent = scopeState.amp.toFixed(2) + 'x'; }
+    get: function () { return Math.log(curParams().amp / 0.05) / Math.log(3.0 / 0.05); },
+    set: function (v) { curParams().amp = Math.round(0.05 * Math.pow(3.0 / 0.05, v) * 100) / 100; },
+    paint: function () { el.knobVertVal.textContent = curParams().amp.toFixed(2) + 'x'; }
   });
   bindKnob(el.knobHoriz, {
-    get: function () { return Math.log(scopeState.samples / 64) / Math.log(2048 / 64); },
-    set: function (v) { scopeState.samples = Math.max(64, Math.min(2048, Math.round(64 * Math.pow(2048 / 64, v)))); },
+    get: function () { return Math.log(curParams().samples / 64) / Math.log(2048 / 64); },
+    set: function (v) { curParams().samples = Math.max(64, Math.min(2048, Math.round(64 * Math.pow(2048 / 64, v)))); },
     paint: function () {
       const sr = window.SR || 44100;
-      el.knobHorizVal.textContent = (scopeState.samples / sr * 1000).toFixed(1) + ' ms';
+      el.knobHorizVal.textContent = (curParams().samples / sr * 1000).toFixed(1) + ' ms';
     }
   });
   bindKnob(el.knobSpecAmp, {
-    get: function () { return Math.log(scopeState.specAmp / 0.2) / Math.log(3.0 / 0.2); },
-    set: function (v) { scopeState.specAmp = Math.round(0.2 * Math.pow(3.0 / 0.2, v) * 100) / 100; },
-    paint: function () { el.knobSpecAmpVal.textContent = scopeState.specAmp.toFixed(1) + 'x'; }
+    get: function () { return Math.log(curParams().specAmp / 0.2) / Math.log(3.0 / 0.2); },
+    set: function (v) { curParams().specAmp = Math.round(0.2 * Math.pow(3.0 / 0.2, v) * 100) / 100; },
+    paint: function () { el.knobSpecAmpVal.textContent = curParams().specAmp.toFixed(1) + 'x'; }
   });
   bindKnob(el.knobCenter, {
-    get: function () { return Math.log(scopeState.specCenter / 50) / Math.log(15000 / 50); },
-    set: function (v) { scopeState.specCenter = Math.round(50 * Math.pow(15000 / 50, v)); },
-    paint: function () { el.knobCenterVal.textContent = formatFreq(scopeState.specCenter); }
+    get: function () { return Math.log(curParams().specCenter / 50) / Math.log(15000 / 50); },
+    set: function (v) { curParams().specCenter = Math.round(50 * Math.pow(15000 / 50, v)); },
+    paint: function () { el.knobCenterVal.textContent = formatFreq(curParams().specCenter); }
   });
   bindKnob(el.knobSpan, {
-    get: function () { return Math.log(scopeState.specSpan / 200) / Math.log(100000 / 200); },
-    set: function (v) { scopeState.specSpan = Math.round(200 * Math.pow(100000 / 200, v)); },
-    paint: function () { el.knobSpanVal.textContent = formatFreq(scopeState.specSpan); }
+    get: function () { return Math.log(curParams().specSpan / 200) / Math.log(100000 / 200); },
+    set: function (v) { curParams().specSpan = Math.round(200 * Math.pow(100000 / 200, v)); },
+    paint: function () { el.knobSpanVal.textContent = formatFreq(curParams().specSpan); }
   });
 }
 
@@ -405,6 +471,19 @@ export function initScope() {
   initScopeKnobs();
   el.viewToggle.addEventListener('click', toggleScopeMode);
   el.mixToggle.addEventListener('click', toggleMixView);
+  // 单击通道栏：选中高亮，旋钮作用于该通道
+  el.scope.addEventListener('pointerdown', function (e) {
+    const rect = el.scope.getBoundingClientRect();
+    if (!rect.height) return;
+    const y = e.clientY - rect.top;
+    if (scopeState.view === 'mix') {
+      if (scopeState.selected !== 'mix') selectScopeTarget('mix');
+      return;
+    }
+    const lane = Math.min(3, Math.max(0, Math.floor(y / (rect.height / 4))));
+    const id = CH_DEFS[lane].id;
+    if (scopeState.selected !== id) selectScopeTarget(id);
+  });
   // 窗口大小/显示变化 → 重算画布与网格
   if (typeof ResizeObserver === 'function') {
     new ResizeObserver(function () { resizeScope(); }).observe(el.scope);

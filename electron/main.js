@@ -525,6 +525,32 @@ function createWindow() {
         '})'
       );
     }).then(function () {
+      // 2.9. 通道选择：单击通道栏选中高亮，旋钮作用于选中通道（各通道参数独立）
+      return probe('scope-select',
+        '(async function(){' +
+        '  var s = await import("./ui/scope.js");' +
+        '  var cv = document.getElementById("scope");' +
+        '  var rect = cv.getBoundingClientRect();' +
+        '  cv.dispatchEvent(new PointerEvent("pointerdown", { clientX: rect.left + 40, clientY: rect.top + rect.height * 0.625, bubbles: true }));' +
+        '  var selCh3 = s.scopeState.selected === "ch3";' +
+        '  var hasParams = !!s.scopeState.params.ch1 && !!s.scopeState.params.ch4 && !!s.scopeState.params.mix;' +
+        '  var ampBefore = s.scopeState.params.ch3.amp;' +
+        '  var ch1Before = s.scopeState.params.ch1.amp;' +
+        '  var kv = document.getElementById("knobVert");' +
+        '  kv.dispatchEvent(new PointerEvent("pointerdown", { clientY: 300, bubbles: true }));' +
+        '  kv.dispatchEvent(new PointerEvent("pointermove", { clientY: 330, bubbles: true }));' +
+        '  kv.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));' +
+        '  var ch3Changed = Math.abs(s.scopeState.params.ch3.amp - ampBefore) > 0.0001;' +
+        '  var ch1Untouched = Math.abs(s.scopeState.params.ch1.amp - ch1Before) < 1e-9;' +
+        '  var mb = document.getElementById("mixToggle");' +
+        '  mb.click();' +
+        '  var mixSelected = s.scopeState.selected === "mix";' +
+        '  mb.click();' +
+        '  var backToCh3 = s.scopeState.selected === "ch3";' +
+        '  return { selCh3: selCh3, hasParams: hasParams, ch3Changed: ch3Changed, ch1Untouched: ch1Untouched, mixSelected: mixSelected, backToCh3: backToCh3 };' +
+        '})()'
+      );
+    }).then(function () {
       // 3. 「应用全部函数」：完整用户流程验证（带进度日志，任何挂起点都会暴露）
       return probe('apply-button',
         '(async function () {' +
