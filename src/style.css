@@ -635,34 +635,55 @@ body::after {
 .ex-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ex-size { color: var(--text-dim); font-size: 10px; flex: none; }
 
-/* ============ 通道控制窗口 ============ */
-.channels-body { padding: 10px; }
+/* ============ 通道控制窗口（CH1–CH4 每通道一行 · 手风琴展开音源选择） ============ */
+.channels-body { padding: 10px; overflow: hidden; }
 
 .channel-bar {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.channel-strip {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+.channel-row {
   border: 1px solid var(--panel-border);
   border-left: 3px solid var(--chcolor, var(--green));
   border-radius: 6px;
   background: rgba(2, 7, 4, 0.55);
-  box-shadow: inset 0 0 14px rgba(0,0,0,0.4);
+  box-shadow: inset 0 0 14px rgba(0, 0, 0, 0.4);
   transition: opacity .15s, box-shadow .15s;
+  overflow: hidden;
 }
 
-.channel-strip.off { opacity: 0.45; }
+.channel-row.off { opacity: 0.45; }
 
-.channel-strip.solo {
+.channel-row.solo {
   border-color: var(--amber);
   box-shadow: inset 0 0 14px rgba(0,0,0,0.4), 0 0 12px rgba(255,180,84,0.35);
 }
+
+.ch-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.ch-row-head:hover { background: rgba(60, 255, 136, 0.05); }
+
+.ch-caret {
+  flex: none;
+  width: 18px;
+  padding: 0;
+  font-size: 11px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  box-shadow: none;
+  text-shadow: none;
+}
+.channel-row.open .ch-caret { color: var(--chcolor, var(--green)); }
 
 .ch-power {
   flex: none;
@@ -683,7 +704,7 @@ body::after {
   flex-direction: column;
   line-height: 1.25;
   min-width: 0;
-  flex: none;
+  flex: 1 1 110px;
 }
 .ch-code {
   font-size: 10px;
@@ -691,17 +712,16 @@ body::after {
   letter-spacing: 1px;
   text-shadow: 0 0 6px var(--chcolor, var(--green-glow));
 }
-.ch-name {
+.ch-sum {
   font-size: 11px;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 90px;
 }
 
 .ch-route { flex: none; font-size: 10px; padding: 4px 6px; }
-.channel-strip.solo .ch-route {
+.channel-row.solo .ch-route {
   background: var(--amber);
   color: #241500;
   text-shadow: none;
@@ -709,10 +729,43 @@ body::after {
   box-shadow: 0 0 8px rgba(255,180,84,0.6);
 }
 
-.ch-vol { flex: 1; min-width: 40px; accent-color: var(--chcolor, var(--green)); cursor: pointer; }
+.ch-vol { flex: 1 1 60px; min-width: 40px; accent-color: var(--chcolor, var(--green)); cursor: pointer; }
 .ch-volval { font-size: 10px; color: var(--text); min-width: 32px; text-align: right; flex: none; }
 
-.ch-modbtn { flex: none; font-size: 10px; padding: 4px 7px; }
+/* 展开面板：本通道由哪些音源相加 */
+.ch-src-panel {
+  border-top: 1px solid var(--panel-border);
+  padding: 8px 10px 10px;
+  background: rgba(2, 7, 4, 0.5);
+}
+.ch-src-title {
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.ch-src-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+}
+.src-check {
+  padding: 5px 8px;
+  font-size: 11px;
+  text-align: left;
+  border: 1px solid var(--panel-border);
+  border-radius: 5px;
+  background: #0b2417;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.src-check:hover { color: var(--text); border-color: var(--green-dim); }
+.src-check.on {
+  color: var(--chcolor, var(--green));
+  border-color: var(--chcolor, var(--green-dim));
+  background: rgba(60, 255, 136, 0.08);
+  box-shadow: 0 0 8px rgba(60, 255, 136, 0.15);
+}
 
 /* ============ 演示条（混音器窗口内） ============ */
 .demo-bar {

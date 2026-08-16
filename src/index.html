@@ -37,7 +37,7 @@
       <!-- 主示波器窗口 -->
       <section class="win" data-win="scope">
         <header class="win-bar">
-          <span class="win-title">◉ 主示波器 · OSCILLOSCOPE</span>
+          <span class="win-title">◉ 主示波器 · 4 通道</span>
           <button class="win-btn win-lock locked" title="已锁定：禁止移动与缩放（点击解锁）">🔒</button>
           <button class="win-btn win-min" title="最小化">—</button>
           <button class="win-btn win-close" title="关闭（任务栏可重新打开）">×</button>
@@ -131,17 +131,15 @@
         </div>
       </section>
 
-      <!-- 通道控制窗口（弹出层 · 可自由拖动 · 默认解锁） -->
+      <!-- 通道控制窗口（弹出层 · 可拖动 · 无锁按钮 · 禁止缩放与滚动） -->
       <section class="win" data-win="channels">
         <header class="win-bar">
-          <span class="win-title">🎛 通道控制 · CH1–CH4 大通道</span>
-          <button class="win-btn win-lock" title="已解锁：可拖动（点击锁定）">🔓</button>
+          <span class="win-title">🎛 通道控制 · CH1–CH4</span>
           <button class="win-btn win-min" title="最小化">—</button>
           <button class="win-btn win-close" title="关闭（窗口菜单可重新打开）">×</button>
         </header>
         <div class="win-body channels-body">
           <div class="channel-bar" id="channelBar"></div>
-          <p class="hint-line">每个功能模块是一条「大通道」：可开关、可<b>合并</b>进主混音，或<b>独立</b>（SOLO）单独监听；有通道独立时只输出独立通道。点「窗口」按钮打开对应模块窗口。</p>
         </div>
       </section>
 

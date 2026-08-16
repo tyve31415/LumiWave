@@ -1,5 +1,7 @@
 /* =========================================================
-   主示波器：各「大通道」独立彩色波形 + 混合输出波形/频谱
+   主示波器：4 通道示波器（CH1–CH4 各占一栏 + MIX 混合输出栏）
+   · 波形模式：5 栏横向分栏，每栏一条彩色波形 + 栏标签
+   · 频谱模式：5 栏频谱（CH1–CH4 + MIX）
    性能优化：
    1. 网格静态层缓存到离屏画布，仅尺寸变化时重绘
    2. 波形辉光用「双描边」替代 shadowBlur（显著降低 GPU 开销）
@@ -46,20 +48,31 @@ function renderGridLayer() {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, scopeState.w, scopeState.h);
 
+  // 竖向细网格
   g.lineWidth = 1;
-  g.strokeStyle = 'rgba(60,255,136,0.08)';
-  const gx = 12, gy = 8;
-  for (let i = 0; i <= gx; i++) {
-    const x = (i / gx) * scopeState.w;
+  g.strokeStyle = 'rgba(60,255,136,0.07)';
+  for (let i = 0; i <= 24; i++) {
+    const x = (i / 24) * scopeState.w;
     g.beginPath(); g.moveTo(x, 0); g.lineTo(x, scopeState.h); g.stroke();
   }
-  for (let i = 0; i <= gy; i++) {
-    const y = (i / gy) * scopeState.h;
+  // 每栏横向细网格
+  const laneH = scopeState.h / 5;
+  for (let i = 0; i <= 10; i++) {
+    const y = (i / 10) * scopeState.h;
     g.beginPath(); g.moveTo(0, y); g.lineTo(scopeState.w, y); g.stroke();
   }
-  g.strokeStyle = 'rgba(60,255,136,0.20)';
-  g.beginPath(); g.moveTo(0, scopeState.h / 2); g.lineTo(scopeState.w, scopeState.h / 2); g.stroke();
-  g.beginPath(); g.moveTo(scopeState.w / 2, 0); g.lineTo(scopeState.w / 2, scopeState.h); g.stroke();
+  // 栏中线（每栏内）
+  g.strokeStyle = 'rgba(60,255,136,0.10)';
+  for (let lane = 0; lane < 5; lane++) {
+    const mid = lane * laneH + laneH / 2;
+    g.beginPath(); g.moveTo(0, mid); g.lineTo(scopeState.w, mid); g.stroke();
+  }
+  // 分栏分隔线（CH1–CH4 + MIX）
+  g.strokeStyle = 'rgba(60,255,136,0.24)';
+  for (let lane = 1; lane < 5; lane++) {
+    const y = lane * laneH;
+    g.beginPath(); g.moveTo(0, y); g.lineTo(scopeState.w, y); g.stroke();
+  }
 }
 
 export function resizeScope() {
@@ -69,7 +82,7 @@ export function resizeScope() {
   renderGridLayer();
 }
 
-/* ---------- 波形绘制 ---------- */
+/* ---------- 波形绘制（5 栏：CH1–CH4 + MIX） ---------- */
 function tracePath(data, n, w, amp, mid) {
   for (let i = 0; i < n; i++) {
     const x = (i / (n - 1)) * w;
@@ -78,39 +91,63 @@ function tracePath(data, n, w, amp, mid) {
   }
 }
 
-/** 各大通道独立波形（彩色细线叠加） */
-function drawChannelTraces() {
-  const w = scopeState.w, h = scopeState.h, mid = h / 2;
+function laneAmp(laneH) {
+  return laneH * clamp(scopeState.amp * 2, 0.08, 2.6);
+}
+
+/** CH1–CH4：各占一栏的独立彩色波形 */
+function drawChannelLanes() {
+  const w = scopeState.w, h = scopeState.h;
+  const laneH = h / 5;
+  const amp = laneAmp(laneH);
   const n = Math.min(scopeState.samples, 2048);
-  for (const d of CH_DEFS) {
+  for (let i = 0; i < CH_DEFS.length; i++) {
+    const d = CH_DEFS[i];
     const s = chState[d.id];
+    const y0 = i * laneH;
+    const mid = y0 + laneH / 2;
+    // 栏标签
+    sctx.save();
+    sctx.font = '10px monospace';
+    sctx.textBaseline = 'top';
+    sctx.fillStyle = d.color;
+    sctx.globalAlpha = s.on ? 0.95 : 0.32;
+    sctx.fillText(d.code + ' ' + d.name + (s.on ? '' : ' · 关'), 6, y0 + 3);
+    sctx.restore();
     if (!s.on) continue;
     const td = getChannelTimeData(d.id);
     if (!td) continue;
     readChannelTimeData(d.id);
     sctx.save();
     sctx.strokeStyle = d.color;
-    sctx.globalAlpha = 0.8;
+    sctx.globalAlpha = 0.85;
     sctx.lineWidth = 1.15;
     sctx.lineCap = 'round';
     sctx.lineJoin = 'round';
     sctx.beginPath();
-    tracePath(td, n, w, h * 0.19, mid);
+    tracePath(td, n, w, amp, mid);
     sctx.stroke();
     sctx.restore();
   }
 }
 
-/** 混合输出波形（亮绿双描边） */
-function drawMixWave() {
+/** MIX 混合输出栏（亮绿双描边） */
+function drawMixLane() {
   if (!analyser) return;
+  const w = scopeState.w, h = scopeState.h;
+  const laneH = h / 5;
+  const y0 = 4 * laneH;
+  const mid = y0 + laneH / 2;
+  const amp = laneAmp(laneH);
   analyser.getFloatTimeDomainData(timeData);
-  const w = scopeState.w, h = scopeState.h, mid = h / 2;
-  const amp = h * scopeState.amp;
   const n = Math.min(scopeState.samples, timeData.length);
   const start = Math.floor((timeData.length - n) / 2);
 
   sctx.save();
+  sctx.font = '10px monospace';
+  sctx.textBaseline = 'top';
+  sctx.fillStyle = '#eafff2';
+  sctx.fillText('MIX 混合输出', 6, y0 + 3);
   sctx.lineCap = 'round';
   sctx.lineJoin = 'round';
   // 第一遍：宽、半透明（光晕）
@@ -137,11 +174,11 @@ function drawMixWave() {
 }
 
 function drawWave() {
-  drawChannelTraces();
-  drawMixWave();
+  drawChannelLanes();
+  drawMixLane();
 }
 
-/* ---------- 频谱绘制（每通道一栏 + 混合栏） ---------- */
+/* ---------- 频谱绘制（5 栏：CH1–CH4 + MIX） ---------- */
 function drawSpecBand(label, color, data, y0, bh) {
   const w = scopeState.w;
   sctx.save();
@@ -179,23 +216,30 @@ function drawSpecBand(label, color, data, y0, bh) {
 function drawSpectrum() {
   if (!ctx) return;
   const h = scopeState.h;
-  const bands = [];
-  const active = CH_DEFS.filter(function (d) { return chState[d.id].on; });
-  for (const d of active) {
+  const laneH = h / 5;
+  for (let i = 0; i < CH_DEFS.length; i++) {
+    const d = CH_DEFS[i];
+    const s = chState[d.id];
+    const y0 = i * laneH;
     const fd = getChannelFreqData(d.id);
-    if (fd) {
+    if (fd && s.on) {
       readChannelFreqData(d.id);
-      bands.push({ label: d.code + ' ' + d.name, color: d.color, data: fd });
+      drawSpecBand(d.code + ' ' + d.name, d.color, fd, y0, laneH);
+    } else {
+      // 关闭通道：仅保留栏标签
+      sctx.save();
+      sctx.font = '10px monospace';
+      sctx.textBaseline = 'top';
+      sctx.fillStyle = d.color;
+      sctx.globalAlpha = 0.32;
+      sctx.fillText(d.code + ' ' + d.name + ' · 关', 6, y0 + 3);
+      sctx.restore();
     }
   }
-  if (active.length > 1 && spectrumAnalyser) {
+  // MIX 混合输出栏
+  if (spectrumAnalyser) {
     spectrumAnalyser.getByteFrequencyData(freqData);
-    bands.push({ label: 'MIX 混合', color: '#eafff2', data: freqData });
-  }
-  if (!bands.length) return;
-  const bh = h / bands.length;
-  for (let i = 0; i < bands.length; i++) {
-    drawSpecBand(bands[i].label, bands[i].color, bands[i].data, i * bh, bh);
+    drawSpecBand('MIX 混合输出', '#eafff2', freqData, 4 * laneH, laneH);
   }
 }
 

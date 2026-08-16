@@ -352,11 +352,11 @@ function createWindow() {
 
     // 0. 入口模块装载（若页面脚本失败，这里给出具体错误）
     probe('main-module',
-      'import("./main.js").then(function(){ return { ok: true, sin: typeof window.sin, voices: document.querySelectorAll(".voice").length, strips: document.querySelectorAll(".channel-strip").length }; }).catch(function(err){ return { ok: false, err: String((err && err.message) || err), stack: String((err && err.stack) || "") }; })'
+      'import("./main.js").then(function(){ return { ok: true, sin: typeof window.sin, voices: document.querySelectorAll(".voice").length, strips: document.querySelectorAll(".channel-row").length }; }).catch(function(err){ return { ok: false, err: String((err && err.message) || err), stack: String((err && err.stack) || "") }; })'
     ).then(function () {
       // 1. UI 结构
       return probe('renderer',
-        '({ voices: document.querySelectorAll(".voice").length, keys: document.querySelectorAll(".key").length, steps: document.querySelectorAll(".step").length, lanes: document.querySelectorAll(".tl-lane").length, title: document.title, windows: document.querySelectorAll(".win").length, strips: document.querySelectorAll(".channel-strip").length, chips: document.querySelectorAll(".ch-chip").length, favList: !!document.getElementById("favList"), tree: !!document.getElementById("explorerTree") })'
+        '({ voices: document.querySelectorAll(".voice").length, keys: document.querySelectorAll(".key").length, steps: document.querySelectorAll(".step").length, lanes: document.querySelectorAll(".tl-lane").length, title: document.title, windows: document.querySelectorAll(".win").length, strips: document.querySelectorAll(".channel-row").length, chips: document.querySelectorAll(".ch-chip").length, favList: !!document.getElementById("favList"), tree: !!document.getElementById("explorerTree") })'
       );
     }).then(function () {
       // 1.5. 布局结构：窗口几何 / 示波器画布尺寸 / 缩放热区
@@ -435,7 +435,7 @@ function createWindow() {
         '  var popupCentered = Math.abs((dP.canvas.w - dP.wins.channels.w) / 2 - dP.wins.channels.x) <= 2 && dP.wins.channels.y <= 60;' +
         '  var popupOnTop = (function(){ var cw = document.querySelector(".win[data-win=channels]"); return getComputedStyle(cw).zIndex === "1200"; })();' +
         '  var popupNoHandles = !document.querySelector(".win[data-win=channels] .rs");' +
-        '  var popupHasLock = !!document.querySelector(".win[data-win=channels] .win-lock");' +
+        '  var popupNoLock = !document.querySelector(".win[data-win=channels] .win-lock");' +
         '  document.getElementById("desktop").dispatchEvent(new PointerEvent("pointerdown", { clientX: 700, clientY: 700, bubbles: true }));' +
         '  await settle(80);' +
         '  var dP2 = m._debugState();' +
@@ -444,10 +444,9 @@ function createWindow() {
         '  await settle(80);' +
         '  var dP3 = m._debugState();' +
         '  var popupReopen = dP3.wins.channels.visible === true;' +
-        // 3.1) 自由拖动：先确保解锁，再拖动弹出层标题栏 → 位置改变（允许覆盖在其他窗口上）
+        // 3.1) 自由拖动：弹出层恒解锁，直接拖动标题栏 → 位置改变（允许覆盖在其他窗口上）
         '  var cwEl = document.querySelector(".win[data-win=channels]");' +
         '  var cwBar = cwEl.querySelector(".win-bar");' +
-        '  if (!cwEl.classList.contains("unlocked")) cwEl.querySelector(".win-lock").click();' +
         '  var popupUnlocked = cwEl.classList.contains("unlocked");' +
         '  pe(cwBar, "pointerdown", 620, 70);' +
         '  pe(document, "pointermove", 820, 370);' +
@@ -463,7 +462,7 @@ function createWindow() {
         '  await settle(150);' +
         '  var d3 = m._debugState();' +
         '  var visCount = 0; for (var k in d3.wins) if (d3.wins[k].visible) visCount++;' +
-        '  return { locks: locks, unlocked: unlocked, handleVisible: handleVisible, noLockBtn: noLockBtn, fixedStillLocked: fixedStillLocked, fixedNoHandles: fixedNoHandles, leftCol: leftCol, fixedStable: fixedStable, navOverflow: navOverflow, menuOpenOk: menuOpenOk, menuClosedOk: menuClosedOk, menuItemCount: menuItemCount, docked: docked, badge: badgeEl ? badgeEl.textContent : null, scopeShrunk: scopeShrunk, overlapsAfterDock: ovAfterDock, moved: moved, detached: detached, overlapsAfterMove: ovAfterMove, popupShown: popupShown, popupCentered: popupCentered, popupOnTop: popupOnTop, popupNoHandles: popupNoHandles, popupHasLock: popupHasLock, popupUnlocked: popupUnlocked, popupClosedOutside: popupClosedOutside, popupReopen: popupReopen, popupMoved: popupMoved, popupToggleHide: popupToggleHide, overlapsAfterArrange: ovInternal(d3), visibleCount: visCount };' +
+        '  return { locks: locks, unlocked: unlocked, handleVisible: handleVisible, noLockBtn: noLockBtn, fixedStillLocked: fixedStillLocked, fixedNoHandles: fixedNoHandles, leftCol: leftCol, fixedStable: fixedStable, navOverflow: navOverflow, menuOpenOk: menuOpenOk, menuClosedOk: menuClosedOk, menuItemCount: menuItemCount, docked: docked, badge: badgeEl ? badgeEl.textContent : null, scopeShrunk: scopeShrunk, overlapsAfterDock: ovAfterDock, moved: moved, detached: detached, overlapsAfterMove: ovAfterMove, popupShown: popupShown, popupCentered: popupCentered, popupOnTop: popupOnTop, popupNoHandles: popupNoHandles, popupNoLock: popupNoLock, popupUnlocked: popupUnlocked, popupClosedOutside: popupClosedOutside, popupReopen: popupReopen, popupMoved: popupMoved, popupToggleHide: popupToggleHide, overlapsAfterArrange: ovInternal(d3), visibleCount: visCount };' +
         '})()'
       );
     }).then(function () {
@@ -495,6 +494,19 @@ function createWindow() {
         '  e.mainEngine.syncVoices();' +
         '  return { runtimeError: runtimeErr, stillEnabled: stillOn };' +
         '})()'
+      );
+    }).then(function () {
+      // 2.7. 通道音源路由：默认映射 + 勾选/取消音源（通道 = 所选音源之和）
+      return probe('channel-sources',
+        'import("./core/channels.js").then(function (c) {' +
+        '  var defaults = c.chState.ch1.sources.mixer === true && c.chState.ch2.sources.timeline === true && c.chState.ch3.sources.music === true && c.chState.ch4.sources.seq === true && c.chState.ch1.sources.timeline === false;' +
+        '  c.setChannelSource("ch1", "timeline", true);' +
+        '  var toggleOn = c.chState.ch1.sources.timeline === true;' +
+        '  var summary = c.channelSourceSummary("ch1");' +
+        '  c.setChannelSource("ch1", "timeline", false);' +
+        '  var toggleOff = c.chState.ch1.sources.timeline === false;' +
+        '  return { defaults: defaults, toggleOn: toggleOn, toggleOff: toggleOff, summary: summary, routingReady: c.isRoutingReady(), anySolo: c.anySolo() };' +
+        '})'
       );
     }).then(function () {
       // 3. 「应用全部函数」：完整用户流程验证（带进度日志，任何挂起点都会暴露）

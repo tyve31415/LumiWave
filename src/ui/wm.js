@@ -4,7 +4,8 @@
    · 「收藏夹 · 本地音乐」合体窗口为固定栏（最左列）：位置大小恒定，
      禁止拖动/缩放/停靠，无锁按钮；步进音序器位于最右列（可自由调整）
    · 「通道控制」为弹出层：顶栏「窗口」菜单打开，悬浮覆盖在其他窗口之上，
-     可自由拖动（位置记忆），不参与分屏与障碍计算，点击窗口外自动收起
+     可自由拖动（位置记忆），无锁按钮，禁止缩放，不参与分屏与障碍计算，
+     点击窗口外自动收起
    · 顶栏导航：窗口按钮合并为「🪟 窗口」下拉菜单（由 WIN_DEFS 生成），
      含各窗口状态指示与「▦ 整理」入口
    · 右上角「锁定」按钮：锁定=禁止移动/缩放（默认）；解锁后可调整
@@ -36,7 +37,7 @@ const DOCK_SIDE_LABEL = { right: '▶', left: '◀', bottom: '▼', top: '▲' }
    点击窗口外自动收起，默认隐藏） */
 const WIN_DEFS = [
   { id: 'explorer',  title: '🗂 收藏夹 · 本地音乐', short: '收藏夹', x: 10,   y: 10,  w: 336, h: 780, minW: 300, minH: 400, fixed: true },
-  { id: 'channels',  title: '🎛 通道控制',          short: '通道',   x: 408,  y: 48,  w: 720, h: 120, minW: 460, minH: 100, popup: true },
+  { id: 'channels',  title: '🎛 通道控制',          short: '通道',   x: 408,  y: 48,  w: 720, h: 300, minW: 460, minH: 100, popup: true },
   { id: 'scope',     title: '◉ 主示波器',          short: '示波器', x: 356,  y: 10,  w: 824, h: 400, minW: 380, minH: 240 },
   { id: 'mixer',     title: '🎹 混音器 · CH1',      short: '混音器', x: 356,  y: 420, w: 450, h: 370, minW: 380, minH: 240 },
   { id: 'timeline',  title: '🕘 时间线 · CH2',      short: '时间线', x: 816,  y: 420, w: 364, h: 370, minW: 320, minH: 200 },
@@ -840,7 +841,7 @@ export function initWM() {
       el: el,
       rect: { x: 0, y: 0, w: def.minW, h: def.minH },
       visible: def.popup ? (s.visible === true) : (s.visible !== false), // 弹出层默认隐藏
-      locked: def.fixed ? true : (def.popup ? (s.locked === true) : (s.locked !== false)), // 弹出层默认解锁（可自由移动）
+      locked: def.fixed ? true : (def.popup ? false : (s.locked !== false)), // 弹出层恒解锁（无锁按钮，可自由拖动）
       dock: (!def.fixed && !def.popup && s.dock && s.dock.targetId) ? { targetId: s.dock.targetId, side: s.dock.side || 'right' } : null,
       focused: false
     };
