@@ -59,6 +59,28 @@ npm run dist    # 生成 NSIS 安装包 + 便携版（输出到 dist/）
 | 🎧 本地音乐（CH3） | WAV/MP3/FLAC/OGG 播放器 + 波形/频谱 |
 | 🔢 音序器（CH4） | 16 步音序器（独立引擎 + seq-only 门限） |
 
+## 打包分发（Windows）
+
+```bash
+npm run dist    # 生成 NSIS 安装包 + 便携版（输出到 dist/）
+npm run pack    # 仅生成未打包的目录版（快速验证，不产出安装器）
+```
+
+产物（位于 `dist/`）：
+
+| 文件 | 说明 |
+| --- | --- |
+| `示波器合成器 Setup 2.0.0.exe` | NSIS 安装包：安装向导、可选安装目录、桌面/开始菜单快捷方式、卸载器 |
+| `示波器合成器 2.0.0.exe` | 便携版：单文件免安装，双击即用，适合 U 盘分发 |
+
+打包要点：
+
+- 应用图标为 `build/icon.ico`（256×256）；换图标直接替换该文件即可
+- 使用教程会随包分发（安装目录 `resources/使用教程.md`，菜单「帮助 → 打开使用教程」）
+- 版本号由 `package.json` 的 `version` 决定，发布新版前先改它
+- 首次打包会联网下载打包工具链（NSIS 等，缓存在 `%LOCALAPPDATA%\electron-builder\Cache`）
+- 未做代码签名：Windows SmartScreen 会提示「未知发布者」，用户点「更多信息 → 仍要运行」即可；正式大规模分发建议购买代码签名证书
+
 ## 功能一览
 
 - ▶ 内置演示曲「Funky Stars」（真实 MIDI 转录），也支持导入任意 `.mid` 自动分配 16 声部

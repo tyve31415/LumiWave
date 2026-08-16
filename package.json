@@ -26,15 +26,19 @@
       "src/**/*",
       "package.json"
     ],
+    "extraResources": [
+      { "from": "使用教程.md", "to": "使用教程.md" }
+    ],
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         { "target": "nsis", "arch": ["x64"] },
         { "target": "portable", "arch": ["x64"] }
-      ],
-      "artifactName": "${productName}-${version}-${arch}.${ext}"
+      ]
     },
     "nsis": {
       "oneClick": false,

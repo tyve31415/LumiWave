@@ -246,12 +246,15 @@ function buildMenuTemplate() {
       label: '帮助',
       submenu: [
         { label: '打开使用教程（Markdown）', click: function () {
-          const p = path.join(__dirname, '..', '使用教程.md');
+          // 打包后教程作为 extraResources 放在 resources 目录
+          const p = app.isPackaged
+            ? path.join(process.resourcesPath, '使用教程.md')
+            : path.join(__dirname, '..', '使用教程.md');
           shell.openPath(p);
         } },
-        { label: '在资源管理器中显示项目文件夹', click: function () {
+        ...(app.isPackaged ? [] : [{ label: '在资源管理器中显示项目文件夹', click: function () {
           shell.openPath(path.join(__dirname, '..'));
-        } },
+        } }]),
         { type: 'separator' },
         { label: '关于', click: function () { showAbout(); } }
       ]
