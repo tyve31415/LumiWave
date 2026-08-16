@@ -41,6 +41,7 @@
           <div class="ch-legend" id="chLegend"></div>
           <button id="viewToggle" class="win-btn win-view-toggle" title="切换波形 / 频谱显示">波形</button>
           <button id="mixToggle" class="win-btn win-mix-toggle" title="切换显示：4 个独立通道 / 单个 MIX 通道">MIX</button>
+          <span id="freqReadout" title="当前频率读数">440.0 Hz</span>
           <button class="win-btn win-lock locked" title="已锁定：禁止移动与缩放（点击解锁）">🔒</button>
           <button class="win-btn win-min" title="最小化">—</button>
           <button class="win-btn win-close" title="关闭（任务栏可重新打开）">×</button>
@@ -48,9 +49,6 @@
         <div class="win-body scope-layout">
           <div class="scope-main">
             <canvas id="scope"></canvas>
-            <div class="scope-hud">
-              <span id="freqReadout">440.0 Hz</span>
-            </div>
           </div>
           <div class="scope-knobs">
             <div class="knob-wrap">
