@@ -215,6 +215,10 @@ export function buildWorkletSource(processorName, opts) {
     .replace(/\bSONG_DATA\b/g, 'SONG_DATA_' + pv)
     .replace(/\bSONG_LEN\b/g, 'SONG_LEN_' + pv)
     .replace(/\bSONG_TPS\b/g, 'SONG_TPS_' + pv) + ';');
+  // 关键：声部函数由 new Function 编译，只能看到 globalThis——
+  // 必须把带前缀的 S/P 显式挂到 globalThis，否则公式里的 S() 被改写为
+  // ch1_S()/ch2_S()/ch4_S() 后会在运行时报 "xxx_S is not defined"
+  lines.push('globalThis.' + pv + 'S = ' + pv + 'S; globalThis.' + pv + 'P = ' + pv + 'P;');
   lines.push('globalThis.TWO_PI = TWO_PI; globalThis.PI = PI; globalThis.SR = sampleRate;');
   lines.push('globalThis.sin = sin; globalThis.cos = cos; globalThis.tan = tan; globalThis.atan = atan; globalThis.atan2 = atan2; globalThis.abs = abs; globalThis.floor = floor; globalThis.ceil = ceil; globalThis.round = round; globalThis.pow = pow; globalThis.sqrt = sqrt; globalThis.exp = exp; globalThis.log = log; globalThis.log2 = log2; globalThis.min = min; globalThis.max = max; globalThis.random = random; globalThis.sign = sign;');
   for (let k = 0; k < names.length; k++) {

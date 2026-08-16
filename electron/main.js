@@ -432,6 +432,26 @@ function createWindow() {
         'import("./core/engine.js").then(function (e) { return Promise.all([e.timelineEngine.ensureEngine(), e.seqEngine.ensureEngine()]).then(function () { return { tlWorklet: !!e.timelineEngine.workletNode, seqWorklet: !!e.seqEngine.workletNode, tlFallback: !!e.timelineEngine.fallbackState, seqFallback: !!e.seqEngine.fallbackState, tlVoices: e.timelineEngine.voices.length, seqV1Enabled: e.seqEngine.voices[0].enabled, seqGate: e.seqEngine.gateMode, tlRunning: e.timelineEngine.running, seqRunning: e.seqEngine.running }; }); })'
       );
     }).then(function () {
+      // 2.6. S/P 歌曲函数运行时回归：公式含 S(ch,t) 时改写为 ch1_S 后
+      // 必须在 worklet 内可运行（此前报 "ch1_S is not defined" 并停用声部）
+      return probe('song-voices',
+        '(async function(){' +
+        '  var e = await import("./core/engine.js");' +
+        '  var settle = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };' +
+        '  var v = e.mainEngine.voices[0];' +
+        '  var oldSrc = v.source, oldOn = v.enabled;' +
+        '  v.source = "S(1, t) * 0.05";' +
+        '  v.enabled = true;' +
+        '  e.mainEngine.syncVoices();' +
+        '  await settle(1200);' +
+        '  var runtimeErr = v.error;' +
+        '  var stillOn = v.enabled;' +
+        '  v.source = oldSrc; v.enabled = oldOn;' +
+        '  e.mainEngine.syncVoices();' +
+        '  return { runtimeError: runtimeErr, stillEnabled: stillOn };' +
+        '})()'
+      );
+    }).then(function () {
       // 3. 「应用全部函数」：完整用户流程验证（带进度日志，任何挂起点都会暴露）
       return probe('apply-button',
         '(async function () {' +
