@@ -213,12 +213,12 @@ function drawSelectionBorder() {
   sctx.lineJoin = 'round';
   // 第一遍：宽、半透明（光晕）
   sctx.strokeStyle = color;
-  sctx.globalAlpha = 0.3;
-  sctx.lineWidth = 5.5;
+  sctx.globalAlpha = 0.28;
+  sctx.lineWidth = 4;
   sctx.strokeRect(2.5, y0, scopeState.w - 5, bh);
   // 第二遍：细、实心
   sctx.globalAlpha = 0.95;
-  sctx.lineWidth = 1.6;
+  sctx.lineWidth = 1.2;
   sctx.strokeRect(2.5, y0, scopeState.w - 5, bh);
   sctx.restore();
 }

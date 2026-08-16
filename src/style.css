@@ -386,6 +386,16 @@ body::after {
   box-shadow: 0 0 8px rgba(60, 255, 136, 0.35);
 }
 
+/* 示波器窗口顶部 波形/频谱 切换按钮 */
+.win-view-toggle {
+  width: auto;
+  padding: 0 7px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+}
+.win-view-toggle:hover { color: var(--green); }
+
 .win-body {
   flex: 1;
   min-height: 0;
