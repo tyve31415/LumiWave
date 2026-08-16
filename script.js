@@ -857,6 +857,7 @@
 
   /* ---------- 歌曲播放（演示 / 导入 MIDI） ---------- */
   let savedVoices = null;
+  let lastLoadedVoices = null;
   function saveVoices() {
     if (!savedVoices) {
       savedVoices = voices.map(function (v) {
@@ -884,15 +885,20 @@
       v.el.gval.textContent = Math.round(v.gain * 100) + '%';
       v.el.preset.value = String(matchPreset(v.source));
     }
+    lastLoadedVoices = voices.map(function (v) {
+      return { enabled: v.enabled, gain: v.gain, source: v.source };
+    });
     syncVoices();
   }
   function restoreVoices() {
     if (!savedVoices) return true;
     let changed = false;
-    for (let i = 0; i < CHANNELS; i++) {
-      const s = savedVoices[i];
-      const v = voices[i];
-      if (v.enabled !== s.enabled || v.gain !== s.gain || v.source !== s.source) { changed = true; break; }
+    if (lastLoadedVoices) {
+      for (let i = 0; i < CHANNELS; i++) {
+        const s = lastLoadedVoices[i];
+        const v = voices[i];
+        if (!s || v.enabled !== s.enabled || v.gain !== s.gain || v.source !== s.source) { changed = true; break; }
+      }
     }
     if (changed && !window.confirm('停止播放将还原播放前的声部设置，播放期间的修改会丢失。\n确定停止并还原吗？')) {
       return false;
@@ -908,6 +914,7 @@
       v.el.preset.value = String(matchPreset(v.source));
     }
     savedVoices = null;
+    lastLoadedVoices = null;
     syncVoices();
     return true;
   }
