@@ -5,10 +5,18 @@
 Thumbs.db
 desktop.ini
 
-# Python 缓存（历史 audio2midi 遗留，若重新引入可忽略）
-__pycache__/
-*.pyc
+# Node / Electron
+node_modules/
+dist/
+.npm-cache/
+.npm-logs/
+.electron-cache/
 
 # 音频与 MIDI 中间产物
 *.flac
 *.mid
+
+# 开发探针产物
+probe-out.txt
+probe-err.txt
+probe-shot.png

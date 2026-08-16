@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- 说明：本应用按需用 new Function 编译用户输入的波形公式（合成器核心机制），
+     因此 script-src 允许 'unsafe-eval'；渲染进程已开启 sandbox + contextIsolation，
+     无 Node 权限，IPC 均经主进程校验。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob: 'unsafe-eval'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:; media-src 'self' blob: data:; img-src 'self' data:; connect-src 'self'">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>示波器合成器 · Oscilloscope Synth</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-frame">
+
+    <!-- ============ 顶部任务栏 ============ -->
+    <header class="taskbar">
+      <span class="app-title">◉ 示波器合成器</span>
+      <nav class="taskbar-wins">
+        <button class="task-btn" data-task="scope" title="打开/聚焦主示波器">📟 示波器</button>
+        <button class="task-btn" data-task="explorer" title="打开/聚焦收藏夹">🗂 收藏夹</button>
+        <button class="task-btn" data-task="channels" title="打开/聚焦通道控制">🎛 通道</button>
+        <button class="task-btn" data-task="mixer" title="打开/聚焦混音器（CH1）">🎹 混音器</button>
+        <button class="task-btn" data-task="timeline" title="打开/聚焦时间线（CH2）">🕘 时间线</button>
+        <button class="task-btn" data-task="music" title="打开/聚焦本地音乐（CH3）">🎧 音乐</button>
+        <button class="task-btn" data-task="sequencer" title="打开/聚焦音序器（CH4）">🔢 音序器</button>
+        <span class="task-sep"></span>
+        <button class="task-btn" data-act="arrange" title="重新显示全部窗口并恢复默认分屏布局">▦ 整理</button>
+      </nav>
+      <div class="taskbar-tools">
+        <button id="recordBtn" title="录制当前总输出（含全部通道混合）">● 录制</button>
+        <button id="exportWavBtn" title="导出录制的 WAV">💾 导出</button>
+        <span class="status" id="status">待机 STANDBY</span>
+      </div>
+    </header>
+
+    <!-- ============ 桌面（固定分屏布局 · 窗口不重叠） ============ -->
+    <main class="desktop" id="desktop">
+      <div class="desktop-inner" id="desktopInner">
+
+      <!-- 主示波器窗口 -->
+      <section class="win" data-win="scope">
+        <header class="win-bar">
+          <span class="win-title">◉ 主示波器 · OSCILLOSCOPE</span>
+          <button class="win-btn win-lock locked" title="已锁定：禁止移动与缩放（点击解锁）">🔒</button>
+          <button class="win-btn win-min" title="最小化">—</button>
+          <button class="win-btn win-close" title="关闭（任务栏可重新打开）">×</button>
+        </header>
+        <div class="win-body scope-layout">
+          <div class="scope-main">
+            <canvas id="scope"></canvas>
+            <div class="scope-hud">
+              <div class="ch-legend" id="chLegend"></div>
+              <button id="viewToggle">波形</button>
+              <span id="freqReadout">440.0 Hz</span>
+            </div>
+          </div>
+          <div class="scope-knobs">
+            <div class="knob-wrap">
+              <canvas class="knob" id="knobVert"></canvas>
+              <div class="knob-info"><span>垂直</span><span class="knob-val" id="knobVertVal">0.24x</span></div>
+            </div>
+            <div class="knob-wrap">
+              <canvas class="knob" id="knobHoriz"></canvas>
+              <div class="knob-info"><span>水平</span><span class="knob-val" id="knobHorizVal">46.4 ms</span></div>
+            </div>
+            <div class="knob-wrap">
+              <canvas class="knob" id="knobSpecAmp"></canvas>
+              <div class="knob-info"><span>频幅</span><span class="knob-val" id="knobSpecAmpVal">1.0x</span></div>
+            </div>
+            <div class="knob-wrap">
+              <canvas class="knob" id="knobCenter"></canvas>
+              <div class="knob-info"><span>中心</span><span class="knob-val" id="knobCenterVal">632 Hz</span></div>
+            </div>
+            <div class="knob-wrap">
+              <canvas class="knob" id="knobSpan"></canvas>
+              <div class="knob-info"><span>带宽</span><span class="knob-val" id="knobSpanVal">20.0 kHz</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 收藏夹窗口 -->
+      <section class="win" data-win="explorer">
+        <header class="win-bar">
+          <span class="win-title">🗂 收藏夹 · 资源管理器</span>
+          <button class="win-btn win-lock locked" title="已锁定：禁止移动与缩放（点击解锁）">🔒</button>
+          <button class="win-btn win-min" title="最小化">—</button>
+          <button class="win-btn win-close" title="关闭（任务栏可重新打开）">×</button>
+        </header>
+        <div class="win-body explorer-body">
+          <div class="explorer-head">
+            <span class="explorer-title">收藏的文件夹</span>
+            <button id="favAddBtn" class="icon-btn" title="添加音乐文件夹">＋</button>
+          </div>
+          <div class="fav-list" id="favList"></div>
+          <div class="explorer-tools">
+            <input type="text" id="explorerFilter" class="explorer-filter" placeholder="🔍 筛选…" spellcheck="false">
+            <button id="explorerRefreshBtn" class="icon-btn" title="刷新当前文件夹">↻</button>
+            <button id="explorerUpBtn" class="icon-btn" title="上级目录">↑</button>
+          </div>
+          <div class="explorer-path" id="explorerPath">未选择文件夹</div>
+          <div class="explorer-tree" id="explorerTree">
+            <div class="explorer-empty">点击上方收藏夹中的文件夹<br>或点「＋」添加音乐文件夹</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 通道控制窗口 -->
+      <section class="win" data-win="channels">
+        <header class="win-bar">
+          <span class="win-title">🎛 通道控制 · CH1–CH4 大通道</span>
+          <button class="win-btn win-lock locked" title="已锁定：禁止移动与缩放（点击解锁）">🔒</button>
+          <button class="win-btn win-min" title="最小化">—</button>
+          <button class="win-btn win-close" title="关闭（任务栏可重新打开）">×</button>
+        </header>
+        <div class="win-body channels-body">
+          <div class="channel-bar" id="channelBar"></div>
+          <p class="hint-line">每个功能模块是一条「大通道」：可开关、可<b>合并</b>进主混音，或<b>独立</b>（SOLO）单独监听；有通道独立时只输出独立通道。点「窗口」按钮打开对应模块窗口。</p>
+        </div>
+      </section>
+
+      <!-- 混音器窗口 CH1 -->
+      <section class="win" data-win="mixer">
+        <header class="win-bar">
+          <span class="win-title">🎹 混音器 · CH1 合成器（16 声部 + 钢琴）</span>
+          <button class="win-btn win-lock locked" title="已锁定：禁止移动与缩放（点击解锁）">🔒</button>
+          <button class="win-btn win-min" title="最小化">—</button>
+          <button class="win-btn win-close" title="关闭（任务栏可重新打开）">×</button>
+        </header>
+        <div class="win-body">
+          <div class="demo-bar">
+            <div class="demo-info">
+              <span class="demo-title" id="songTitle">🎵 Funky Stars</span>
+              <span class="demo-sub" id="songSub">内置演示 · 9 声道 · 128 BPM · 循环播放</span>
+            </div>
+            <div class="demo-actions">
+              <button id="demoBtn" class="demo-btn">▶ 播放</button>
+              <button id="importBtn" class="demo-btn">📁 导入 MIDI</button>
+              <button id="demoResetBtn" class="demo-btn" title="回到内置 Funky Stars 演示">🎵 演示</button>
+            </div>
+          </div>
+
+          <div class="controls">
+            <div class="panel">
+              <h2>播放</h2>
+              <button id="playBtn" class="primary">▶ 播放</button>
+              <label>总音量 <input type="range" id="volume" min="0" max="100" value="80"> <span class="val" id="volumeVal">80%</span></label>
+              <label>频率 <input type="range" id="freq" min="20" max="2000" value="440" step="1"> <span class="val" id="freqVal">440 Hz</span></label>
+              <label>声像 <input type="range" id="pan" min="-1" max="1" value="0" step="0.01"> <span class="val" id="panVal">0.00</span></label>
+              <label>滑音 <input type="range" id="glide" min="0" max="100" value="0" step="1"> <span class="val" id="glideVal">0 ms</span></label>
+            </div>
+
+            <div class="panel">
+              <h2>包络</h2>
+              <label>起音 <input type="range" id="attack" min="0" max="1000" value="5" step="1"> <span class="val" id="attackVal">5 ms</span></label>
+              <label>释音 <input type="range" id="release" min="0" max="2000" value="120" step="1"> <span class="val" id="releaseVal">120 ms</span></label>
+            </div>
+
+            <div class="panel">
+              <h2>函数参考</h2>
+              <div class="ref">
+                <p><code>t</code> 时间(秒) · <code>freq</code> 当前频率(Hz) · <code>env</code> 包络(0..1) · <code>SR</code> 采样率</p>
+                <p>波形：<code>sin cos tan sq saw tri pulse(x,w) noise</code></p>
+                <p>音符：<code>n('A4') seq([...],t,dur) midiToFreq</code></p>
+                <p>数学：<code>PI TWO_PI pow sqrt exp log abs floor round min max clamp lerp random</code></p>
+                <p>演示歌曲：<code>S(ch,t)</code> 音符频率 · <code>P(ch,t)</code> 音符相位(秒)，配合 Funky Stars 演示使用</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel full">
+            <h2>混音器 · 16 声部合成（Mixer）</h2>
+            <p class="hint-line">16 个声部同时混音。每个声部可独立编写波形函数、开关和增益，最终求和输出到 CH1 通道。改完函数记得点「应用全部函数」。</p>
+            <div id="voices"></div>
+            <div class="func-actions">
+              <button id="applyBtn">⚡ 应用全部函数</button>
+              <span class="error" id="error"></span>
+            </div>
+          </div>
+
+          <div class="panel full">
+            <h2>16 声部示波器</h2>
+            <canvas id="scopeMulti"></canvas>
+          </div>
+
+          <div class="panel full">
+            <h2>键盘</h2>
+            <div class="piano" id="piano"></div>
+            <p class="hint-line">电脑键盘：Z/S/X/D/C/V/G/B/H/N/J/M（低八度） · Q/2/W/3/E/R/5/T/6/Y/7/U（高八度） · 空格 = 播放/停止 · Esc = 全部停止</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 时间线窗口 CH2 -->
+      <section class="win" data-win="timeline">
+        <header class="win-bar">
+          <span class="win-title">🕘 时间线编辑器 · CH2</span>
+          <button class="win-btn win-lock locked" title="已锁定：禁止移动与缩放（点击解锁）">🔒</button>
+          <button class="win-btn win-min" title="最小化">—</button>
+          <button class="win-btn win-close" title="关闭（任务栏可重新打开）">×</button>
+        </header>
+        <div class="win-body">
+          <div class="panel full">
+            <h2>时间线编辑器（Timeline）</h2>
+            <p class="hint-line">每条轨道是一个声部（V1–V16），可先给每条轨道选波形。点击轨道空白处添加音符；拖动音符移动位置；拖动音符右边缘调整时长；点选音符后可用「音高」改音高；Delete 键或「删除选中」移除。点「▶ 播放」按时间线演奏（独立 CH2 通道）。</p>
+            <div class="tl-controls">
+              <button id="tlPlay">▶ 播放</button>
+              <button id="tlStop">■ 停止</button>
+              <label>速度 <input type="range" id="tlBpm" min="60" max="240" value="120"> <span class="val" id="tlBpmVal">120 BPM</span></label>
+              <label>小节 <input type="range" id="tlBars" min="2" max="32" value="8"> <span class="val" id="tlBarsVal">8 小节</span></label>
+              <label>音高 <select id="tlPitch"></select></label>
+              <button id="tlClear">清空</button>
+              <button id="tlDelete">删除选中</button>
+            </div>
+            <div class="tl-scroll">
+              <div class="tl-content" id="tlContent"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 本地音乐窗口 CH3 -->
+      <section class="win" data-win="music">
+        <header class="win-bar">
+          <span class="win-title">🎧 本地音乐播放器 · CH3</span>
+          <button class="win-btn win-lock locked" title="已锁定：禁止移动与缩放（点击解锁）">🔒</button>
+          <button class="win-btn win-min" title="最小化">—</button>
+          <button class="win-btn win-close" title="关闭（任务栏可重新打开）">×</button>
+        </header>
+        <div class="win-body">
+          <div class="panel full">
+            <h2>本地音乐（WAV / MP3 / FLAC / OGG）</h2>
+            <p class="hint-line">在「收藏夹」窗口点击音频文件即可载入并播放；也可用下方按钮导入。音频波形以蓝色显示在主示波器的 CH3 通道，可合并进主混音或独立监听。</p>
+            <div class="audio-controls">
+              <button id="audioImport">📁 导入音频</button>
+              <button id="audioPlay">▶ 播放</button>
+              <button id="audioStop">■ 停止</button>
+              <button id="audioLoop">🔁 循环:关</button>
+              <label>音量 <input type="range" id="audioVol" min="0" max="100" value="80"> <span class="val" id="audioVolVal">80%</span></label>
+            </div>
+            <div class="audio-progress-wrap">
+              <input type="range" id="audioSeek" min="0" max="1000" value="0">
+              <span id="audioTime">0:00 / 0:00</span>
+            </div>
+            <div class="audio-scopes">
+              <div class="audio-scope">
+                <span class="audio-scope-label">波形</span>
+                <canvas id="audioWave"></canvas>
+              </div>
+              <div class="audio-scope">
+                <span class="audio-scope-label">频谱</span>
+                <canvas id="audioSpectrum"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 音序器窗口 CH4 -->
+      <section class="win" data-win="sequencer">
+        <header class="win-bar">
+          <span class="win-title">🔢 步进音序器 · CH4</span>
+          <button class="win-btn win-lock locked" title="已锁定：禁止移动与缩放（点击解锁）">🔒</button>
+          <button class="win-btn win-min" title="最小化">—</button>
+          <button class="win-btn win-close" title="关闭（任务栏可重新打开）">×</button>
+        </header>
+        <div class="win-body">
+          <div class="panel full">
+            <h2>步进音序器（16 步 · 独立 CH4 通道）</h2>
+            <div class="seq-transport">
+              <button id="seqPlay">▶ 播放音序</button>
+              <label>速度 <input type="range" id="bpm" min="60" max="240" value="120"> <span class="val" id="bpmVal">120 BPM</span></label>
+              <button id="seqClear">清空</button>
+              <button id="seqRandom">随机</button>
+            </div>
+            <div class="seq-grid" id="seqGrid"></div>
+          </div>
+        </div>
+      </section>
+
+      </div>
+    </main>
+  </div>
+  <div class="drop-overlay">🎵 释放以导入文件（MIDI · WAV · MP3 · FLAC）</div>
+<script type="module" src="main.js"></script>
+</body>
+</html>

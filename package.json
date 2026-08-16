@@ -1,0 +1,47 @@
+{
+  "name": "oscilloscope-synth",
+  "productName": "示波器合成器",
+  "version": "2.0.0",
+  "description": "示波器合成器 · Oscilloscope Synth —— Electron 桌面版芯片音乐合成器（16 声部混音 + 示波器 + MIDI 导入 + 时间线编辑器）",
+  "main": "electron/main.js",
+  "author": "Oscilloscope Synth",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "check": "node scripts/check-syntax.js"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.oscilloscopesynth.app",
+    "productName": "示波器合成器",
+    "asar": true,
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "示波器合成器"
+    }
+  }
+}
