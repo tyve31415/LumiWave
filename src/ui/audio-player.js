@@ -10,7 +10,7 @@ import { bus } from '../core/bus.js';
 import { ensureCtx, ctx, showError } from '../core/engine.js';
 import { formatTime } from '../core/util.js';
 import { fitCanvas } from './scope.js';
-import { chState, setChannelOn, setChannelVol, connectChannelSource } from '../core/channels.js';
+import { chState, setChannelOn, setChannelVol, setChannelSource, connectChannelSource } from '../core/channels.js';
 import desktop from '../desktop.js';
 
 export const audioState = {
@@ -85,6 +85,7 @@ export async function importAudio(name, blobOrFile) {
   audioEl.dataset.url = url;
   audioState.loaded = true;
   setChannelOn('ch3', true);      // 载入即接通 CH3 通道
+  setChannelSource('ch3', 'music', true); // 无默认映射：播放音乐时自动勾选「音乐播放器」→ CH3
   await ensureAudioGraph();
   el.audioSeek.value = '0';
   el.audioTime.textContent = '0:00 / 0:00';

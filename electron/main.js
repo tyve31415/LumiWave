@@ -499,10 +499,10 @@ function createWindow() {
         '})()'
       );
     }).then(function () {
-      // 2.7. 通道音源路由：默认映射 + 勾选/取消音源（通道 = 所选音源之和）
+      // 2.7. 通道音源路由：默认无映射（全部未勾选）+ 勾选/取消音源（通道 = 所选音源之和）
       return probe('channel-sources',
         'import("./core/channels.js").then(function (c) {' +
-        '  var defaults = c.chState.ch1.sources.mixer === true && c.chState.ch2.sources.timeline === true && c.chState.ch3.sources.music === true && c.chState.ch4.sources.seq === true && c.chState.ch1.sources.timeline === false;' +
+        '  var defaults = c.chState.ch1.sources.mixer === false && c.chState.ch2.sources.timeline === false && c.chState.ch3.sources.music === false && c.chState.ch4.sources.seq === false && c.chState.ch1.sources.timeline === false;' +
         '  c.setChannelSource("ch1", "timeline", true);' +
         '  var toggleOn = c.chState.ch1.sources.timeline === true;' +
         '  var summary = c.channelSourceSummary("ch1");' +

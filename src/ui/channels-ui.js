@@ -50,7 +50,7 @@ function refreshChannelUI() {
     if (chip) {
       chip.classList.toggle('off', !s.on);
       chip.classList.toggle('solo', s.route === 'solo');
-      chip.title = d.code + ' ' + d.name
+      chip.title = d.code
         + ' · ' + (s.on ? '开' : '关')
         + ' · ' + (s.route === 'mix' ? '合并到主混音' : '独立监听（SOLO）')
         + ' · ' + channelSourceSummary(d.id)
@@ -179,7 +179,7 @@ function buildChannelList() {
     dot.className = 'chip-dot';
     const txt = document.createElement('span');
     txt.className = 'chip-txt';
-    txt.textContent = d.code + ' ' + d.name;
+    txt.textContent = d.code;
     chip.appendChild(dot);
     chip.appendChild(txt);
     chip.addEventListener('click', function () { setChannelOn(d.id, !chState[d.id].on); });

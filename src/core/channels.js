@@ -1,6 +1,7 @@
 /* =========================================================
    大通道（CH1–CH4）路由核心
-   · 4 个输出通道；每个通道 = 所选音源之和
+   · 4 个中性输出通道（CH1–CH4，无默认映射）
+   · 每个通道 = 用户在通道弹出层勾选的音源之和
      （音源：混音器 / 时间线 / 音乐播放器 / 音序器，可多选相加）
    · 每通道独立 AnalyserNode → 主示波器 4 通道分栏波形
    · 每通道独立音量、开关
@@ -21,23 +22,24 @@ export const SOURCES = [
 ];
 
 export const CH_DEFS = [
-  { id: 'ch1', code: 'CH1', name: '混音器',   color: '#3cff88', vol: 0.8, srcId: 'mixer' },
-  { id: 'ch2', code: 'CH2', name: '时间线',   color: '#ffb454', vol: 0.8, srcId: 'timeline' },
-  { id: 'ch3', code: 'CH3', name: '本地音乐', color: '#57c8ff', vol: 0.8, srcId: 'music' },
-  { id: 'ch4', code: 'CH4', name: '音序器',   color: '#ff7bd5', vol: 0.8, srcId: 'seq' }
+  { id: 'ch1', code: 'CH1', name: '', color: '#3cff88', vol: 0.8 },
+  { id: 'ch2', code: 'CH2', name: '', color: '#ffb454', vol: 0.8 },
+  { id: 'ch3', code: 'CH3', name: '', color: '#57c8ff', vol: 0.8 },
+  { id: 'ch4', code: 'CH4', name: '', color: '#ff7bd5', vol: 0.8 }
 ];
 
-const CH_SAVE_KEY = 'musicChannels';
+/* v2：取消默认音源映射后弃用旧配置（旧键中带混音器等默认映射） */
+const CH_SAVE_KEY = 'musicChannels2';
 
-function defaultSources(srcId) {
+function defaultSources() {
   const o = {};
-  for (const s of SOURCES) o[s.id] = s.id === srcId;
+  for (const s of SOURCES) o[s.id] = false;
   return o;
 }
 
 export const chState = {};
 for (const d of CH_DEFS) {
-  chState[d.id] = { on: true, route: 'mix', vol: d.vol, sources: defaultSources(d.srcId) };
+  chState[d.id] = { on: true, route: 'mix', vol: d.vol, sources: defaultSources() };
 }
 
 /* ---------- 恢复持久化的通道配置 ---------- */
@@ -150,11 +152,11 @@ export function connectSource(srcId, node) {
   connectSourceNode(srcId, node);
 }
 
-/** 兼容旧调用：按通道的默认音源接入（引擎/播放器无需改动） */
+/** 兼容旧调用：按通道 id 找到对应音源并注册其输出节点（仅注册，不建立默认映射） */
+const CH_SRC = { ch1: 'mixer', ch2: 'timeline', ch3: 'music', ch4: 'seq' };
 export function connectChannelSource(id, node) {
-  for (const d of CH_DEFS) {
-    if (d.id === id) { connectSource(d.srcId, node); return; }
-  }
+  const srcId = CH_SRC[id];
+  if (srcId) connectSource(srcId, node);
 }
 
 export function getChannelAnalyser(id) { return chAnalysers[id] || null; }

@@ -106,13 +106,13 @@ function drawChannelLanes() {
     const s = chState[d.id];
     const y0 = i * laneH;
     const mid = y0 + laneH / 2;
-    // 栏标签
+    // 栏标签（中性通道编号）
     sctx.save();
     sctx.font = '10px monospace';
     sctx.textBaseline = 'top';
     sctx.fillStyle = d.color;
     sctx.globalAlpha = s.on ? 0.95 : 0.32;
-    sctx.fillText(d.code + ' ' + d.name + (s.on ? '' : ' · 关'), 6, y0 + 3);
+    sctx.fillText(d.code + (s.on ? '' : ' · 关'), 6, y0 + 3);
     sctx.restore();
     if (!s.on) continue;
     const td = getChannelTimeData(d.id);
@@ -224,7 +224,7 @@ function drawSpectrum() {
     const fd = getChannelFreqData(d.id);
     if (fd && s.on) {
       readChannelFreqData(d.id);
-      drawSpecBand(d.code + ' ' + d.name, d.color, fd, y0, laneH);
+      drawSpecBand(d.code, d.color, fd, y0, laneH);
     } else {
       // 关闭通道：仅保留栏标签
       sctx.save();
@@ -232,7 +232,7 @@ function drawSpectrum() {
       sctx.textBaseline = 'top';
       sctx.fillStyle = d.color;
       sctx.globalAlpha = 0.32;
-      sctx.fillText(d.code + ' ' + d.name + ' · 关', 6, y0 + 3);
+      sctx.fillText(d.code + ' · 关', 6, y0 + 3);
       sctx.restore();
     }
   }
