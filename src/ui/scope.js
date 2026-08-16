@@ -15,8 +15,9 @@
 'use strict';
 
 import { el, sctx } from '../core/dom.js';
+import { bus } from '../core/bus.js';
 import { analyser, spectrumAnalyser, ctx, timeData, freqData, mainEngine } from '../core/engine.js';
-import { CH_DEFS, chState, getChannelTimeData, readChannelTimeData, getChannelFreqData, readChannelFreqData } from '../core/channels.js';
+import { CH_DEFS, chState, setChannelOn, getChannelTimeData, readChannelTimeData, getChannelFreqData, readChannelFreqData } from '../core/channels.js';
 import { SONG_BPM } from '../core/song.js';
 import { seqState } from './sequencer.js';
 import { clamp, TWO_PI, PI, midiToFreq } from '../core/math.js';
@@ -239,7 +240,9 @@ function drawSelectionBorder() {
   if (!scopeState.selected) return;
   const inMix = scopeState.view === 'mix';
   const idx = inMix ? -1 : CH_DEFS.findIndex(function (d) { return d.id === scopeState.selected; });
-  const color = inMix ? '#eafff2' : (idx >= 0 ? CH_DEFS[idx].color : 'rgba(60,255,136,0.5)');
+  let color = 'rgba(60,255,136,0.5)';
+  if (scopeState.selected === 'mix') color = '#eafff2';
+  else if (idx >= 0) color = CH_DEFS[idx].color;
   const y0 = inMix || idx < 0 ? 2.5 : idx * (scopeState.h / 4) + 2.5;
   const bh = inMix || idx < 0 ? scopeState.h - 5 : scopeState.h / 4 - 5;
   sctx.save();
@@ -372,23 +375,33 @@ export function toggleMixView() {
     : '切换为单个 MIX 混合通道显示';
   refreshKnobs();  // 旋钮指向新目标
   resizeScope();   // 视图变化 → 重算画布与网格
+  bus.emit('scope-selected');
 }
 
-/** 单击通道栏：选中高亮；再次单击同一栏：取消选中（边框恢复正常） */
+/** 选中某通道/MIX（顶部按钮「内部填充」状态与通道栏边框高亮同步） */
 export function selectScopeTarget(id) {
   if (id === 'mix') {
     scopeState.selected = 'mix';
-    refreshKnobs();
-    return;
+  } else {
+    let isChannel = false;
+    for (let i = 0; i < CH_DEFS.length; i++) {
+      if (CH_DEFS[i].id === id) { isChannel = true; break; }
+    }
+    if (!isChannel) return;
+    lastChTarget = id;
+    scopeState.selected = id;
   }
-  let isChannel = false;
-  for (let i = 0; i < CH_DEFS.length; i++) {
-    if (CH_DEFS[i].id === id) { isChannel = true; break; }
-  }
-  if (!isChannel) return;
-  lastChTarget = id;
-  scopeState.selected = scopeState.selected === id ? null : id;
   refreshKnobs();
+  bus.emit('scope-selected');
+}
+
+/** 取消选中（通道保持开启，按钮回到「边框辉光」状态） */
+export function deselectScopeTarget() {
+  if (scopeState.selected !== null) {
+    scopeState.selected = null;
+    refreshKnobs();
+    bus.emit('scope-selected');
+  }
 }
 
 /* ---------- 频率读数 ---------- */
@@ -524,7 +537,7 @@ export function initScope() {
   initScopeKnobs();
   el.viewToggle.addEventListener('click', toggleScopeMode);
   el.mixToggle.addEventListener('click', toggleMixView);
-  // 单击通道栏：选中高亮；再次单击同一栏：取消选中（边框恢复正常）
+  // 单击通道栏：关→开+选中；开未选中→选中；已选中→取消选中（保持开启）
   el.scope.addEventListener('pointerdown', function (e) {
     const rect = el.scope.getBoundingClientRect();
     if (!rect.height) return;
@@ -534,7 +547,15 @@ export function initScope() {
       return;
     }
     const lane = Math.min(3, Math.max(0, Math.floor(y / (rect.height / 4))));
-    selectScopeTarget(CH_DEFS[lane].id);
+    const id = CH_DEFS[lane].id;
+    if (!chState[id].on) {
+      setChannelOn(id, true);
+      selectScopeTarget(id);
+    } else if (scopeState.selected !== id) {
+      selectScopeTarget(id);
+    } else {
+      deselectScopeTarget();
+    }
   });
   // 窗口大小/显示变化 → 重算画布与网格
   if (typeof ResizeObserver === 'function') {

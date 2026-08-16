@@ -515,13 +515,23 @@ body::after {
   box-shadow: 0 0 6px var(--chcolor, var(--green-glow));
 }
 
-/* 通道开 = 按钮高亮选中 */
+/* 通道开 = 边框高亮辉光（内部不填充） */
 .ch-chip.on {
   border-color: var(--chcolor, var(--green));
-  background: rgba(60, 255, 136, 0.10);
   box-shadow: 0 0 8px var(--chcolor, var(--green-glow));
   color: var(--text);
+  background: rgba(4, 17, 10, 0.92);
 }
+
+/* 通道选中 = 内部填充通道色（通道栏边框同步高亮，旋钮调参） */
+.ch-chip.selected {
+  background: var(--chcolor, var(--green));
+  border-color: var(--chcolor, var(--green));
+  color: #03240f;
+  text-shadow: none;
+  box-shadow: 0 0 10px var(--chcolor, var(--green-glow));
+}
+.ch-chip.selected .chip-dot { background: #03240f; box-shadow: none; }
 
 /* 窗口顶部（标题栏）内的通道开关按钮 */
 .win-bar .ch-legend { flex: none; }

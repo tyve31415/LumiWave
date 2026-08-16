@@ -522,13 +522,16 @@ function createWindow() {
         '  btn.click();' +
         '  var off = s.scopeState.view === "channels" && !btn.classList.contains("on");' +
         '  var chip1 = document.querySelector(".win-bar .ch-chip[data-ch=ch1]");' +
-        '  if (chip1.classList.contains("off")) chip1.click();' +
-        '  var wasOn = chip1.classList.contains("on") && !chip1.classList.contains("off");' +
-        '  chip1.click();' +
-        '  var toggledOff = chip1.classList.contains("off") && !chip1.classList.contains("on");' +
-        '  chip1.click();' +
-        '  var toggledBack = chip1.classList.contains("on") && !chip1.classList.contains("off");' +
-        '  return { btn: !!btn, initial: initial, toggleOn: on, toggleOff: off, chipWasOn: wasOn, chipToggledOff: toggledOff, chipToggledBack: toggledBack };' +
+        '  if (chip1.classList.contains("off")) chip1.click();' +          // 关 → 开
+        '  if (chip1.classList.contains("selected")) s.deselectScopeTarget();' + // 默认选中态 → 先取消选中
+        '  var chipOn = chip1.classList.contains("on") && !chip1.classList.contains("selected");' +
+        '  chip1.click();' +                                               // 开 → 选中
+        '  var chipSelected = chip1.classList.contains("selected") && s.scopeState.selected === "ch1";' +
+        '  chip1.click();' +                                               // 选中 → 关闭
+        '  var chipClosed = chip1.classList.contains("off") && s.scopeState.selected !== "ch1";' +
+        '  chip1.click();' +                                               // 关 → 开（恢复）
+        '  var chipReopen = chip1.classList.contains("on") && !chip1.classList.contains("selected");' +
+        '  return { btn: !!btn, initial: initial, toggleOn: on, toggleOff: off, chipOn: chipOn, chipSelected: chipSelected, chipClosed: chipClosed, chipReopen: chipReopen };' +
         '})'
       );
     }).then(function () {

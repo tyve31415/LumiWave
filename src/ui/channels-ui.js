@@ -14,6 +14,7 @@ import {
   CH_DEFS, SOURCES, chState,
   setChannelOn, cycleChannelRoute, setChannelVol, setChannelSource, channelSourceSummary
 } from '../core/channels.js';
+import { scopeState, selectScopeTarget, deselectScopeTarget } from './scope.js';
 
 function refreshChannelUI() {
   for (const d of CH_DEFS) {
@@ -48,15 +49,17 @@ function refreshChannelUI() {
 
     const chip = el.chLegend.querySelector('[data-ch="' + d.id + '"]');
     if (chip) {
-      // 开 = 高亮选中；关 = 暗化（再次单击关闭）
+      // 三态：关（暗化）/ 开（边框辉光）/ 选中（内部填充通道色）
+      const isSel = s.on && scopeState.selected === d.id;
       chip.classList.toggle('off', !s.on);
-      chip.classList.toggle('on', s.on);
+      chip.classList.toggle('on', s.on && !isSel);
+      chip.classList.toggle('selected', isSel);
       chip.classList.toggle('solo', s.route === 'solo');
       chip.title = d.code
-        + ' · ' + (s.on ? '开' : '关')
+        + ' · ' + (s.on ? (isSel ? '已选中（旋钮调节该通道）' : '已开启') : '已关闭')
         + ' · ' + (s.route === 'mix' ? '合并到主混音' : '独立监听（SOLO）')
         + ' · ' + channelSourceSummary(d.id)
-        + '\n点击切换开关';
+        + '\n点击：开 → 选中 → 关闭（循环）';
     }
   }
 }
@@ -184,7 +187,18 @@ function buildChannelList() {
     txt.textContent = d.code;
     chip.appendChild(dot);
     chip.appendChild(txt);
-    chip.addEventListener('click', function () { setChannelOn(d.id, !chState[d.id].on); });
+    // 三态循环：关 → 开（边框辉光）→ 选中（内部填充 + 通道栏同步高亮）→ 关
+    chip.addEventListener('click', function () {
+      const st = chState[d.id];
+      if (!st.on) {
+        setChannelOn(d.id, true);
+      } else if (scopeState.selected !== d.id) {
+        selectScopeTarget(d.id);
+      } else {
+        setChannelOn(d.id, false);
+        deselectScopeTarget();
+      }
+    });
     el.chLegend.appendChild(chip);
   }
 
@@ -194,6 +208,7 @@ function buildChannelList() {
 export function initChannelUI() {
   buildChannelList();
   bus.on('channels-changed', refreshChannelUI);
+  bus.on('scope-selected', refreshChannelUI); // 选中状态变化 → 同步按钮三态
 
   // 通道窗口：禁止界面内滚轮滚动（完整界面无需滚动）
   const bodyEl = document.querySelector('.channels-body');
