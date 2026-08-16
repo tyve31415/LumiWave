@@ -3,8 +3,9 @@
    · 默认视图：CH1–CH4 各占一栏的独立彩色波形/频谱
    · 顶部 MIX 按钮：切换为「单个 MIX 通道」视图——
      混合输出波形/频谱占满整个示波器（单窗口显示）
-   · 单击某通道栏 → 该栏边框高亮选中；右侧旋钮（垂直/水平/
-     频幅/中心/带宽）调节选中通道（或 MIX）的波形与频谱参数
+   · 单击某通道栏 → 该栏边框高亮选中；再次单击同一栏 → 取消选中，
+     边框恢复正常；右侧旋钮（垂直/水平/频幅/中心/带宽）调节选中
+     通道（或 MIX）的波形与频谱参数
    · 每个通道与 MIX 各自持有独立的一套参数
    性能优化：
    1. 网格静态层缓存到离屏画布，仅尺寸变化时重绘
@@ -31,7 +32,7 @@ const PARAM_DEFAULTS = {
 export const scopeState = {
   mode: 'wave',        // 'wave' | 'spectrum'
   view: 'channels',    // 'channels'（4 个独立通道分栏）| 'mix'（单个 MIX 通道全屏）
-  selected: 'ch1',     // 当前高亮选中的目标（ch1–ch4 或 mix），旋钮作用于它
+  selected: 'ch1',     // 当前高亮选中的目标（ch1–ch4 / mix / null=未选中），旋钮作用于它
   params: {},          // 每个通道与 mix 各自独立的示波器参数
   w: 0,
   h: 0
@@ -40,9 +41,13 @@ for (const k of ['ch1', 'ch2', 'ch3', 'ch4', 'mix']) {
   scopeState.params[k] = Object.assign({}, PARAM_DEFAULTS);
 }
 
-/** 当前选中目标的参数（旋钮读写入口） */
+/** 旋钮参数目标：未选中时沿用最后选中的通道 */
+let lastChTarget = 'ch1';
+
+/** 当前旋钮读写目标（选中目标优先，取消选中时沿用最后通道） */
 function curParams() {
-  return scopeState.params[scopeState.selected] || scopeState.params.ch1;
+  const key = scopeState.selected || lastChTarget;
+  return scopeState.params[key] || scopeState.params.ch1;
 }
 
 /* ---------- 画布适配（供各模块复用） ---------- */
@@ -196,8 +201,9 @@ function drawMixSingle() {
   sctx.restore();
 }
 
-/** 选中目标边框高亮（4 通道视图=选中栏；MIX 视图=整个窗口） */
+/** 选中目标边框高亮（4 通道视图=选中栏；MIX 视图=整个窗口；未选中不绘制） */
 function drawSelectionBorder() {
+  if (!scopeState.selected) return;
   const inMix = scopeState.view === 'mix';
   const idx = inMix ? -1 : CH_DEFS.findIndex(function (d) { return d.id === scopeState.selected; });
   const color = inMix ? '#eafff2' : (idx >= 0 ? CH_DEFS[idx].color : 'rgba(60,255,136,0.5)');
@@ -310,12 +316,10 @@ export function toggleScopeMode() {
 }
 
 /** 顶部 MIX 开关：在「4 个独立通道」与「单个 MIX 通道」两种显示之间切换 */
-let lastChSelected = 'ch1';
-
 export function toggleMixView() {
   scopeState.view = scopeState.view === 'mix' ? 'channels' : 'mix';
   const inMix = scopeState.view === 'mix';
-  scopeState.selected = inMix ? 'mix' : lastChSelected;
+  scopeState.selected = inMix ? 'mix' : lastChTarget;
   el.mixToggle.textContent = inMix ? '4CH' : 'MIX';
   el.mixToggle.classList.toggle('on', inMix);
   el.mixToggle.title = inMix
@@ -325,16 +329,20 @@ export function toggleMixView() {
   resizeScope();   // 视图变化 → 重算画布与网格
 }
 
-/** 单击通道栏：选中并高亮，右侧旋钮开始作用于该通道 */
+/** 单击通道栏：选中高亮；再次单击同一栏：取消选中（边框恢复正常） */
 export function selectScopeTarget(id) {
   if (id === 'mix') {
     scopeState.selected = 'mix';
-  } else {
-    for (let i = 0; i < CH_DEFS.length; i++) {
-      if (CH_DEFS[i].id === id) { lastChSelected = id; break; }
-    }
-    scopeState.selected = id;
+    refreshKnobs();
+    return;
   }
+  let isChannel = false;
+  for (let i = 0; i < CH_DEFS.length; i++) {
+    if (CH_DEFS[i].id === id) { isChannel = true; break; }
+  }
+  if (!isChannel) return;
+  lastChTarget = id;
+  scopeState.selected = scopeState.selected === id ? null : id;
   refreshKnobs();
 }
 
@@ -471,7 +479,7 @@ export function initScope() {
   initScopeKnobs();
   el.viewToggle.addEventListener('click', toggleScopeMode);
   el.mixToggle.addEventListener('click', toggleMixView);
-  // 单击通道栏：选中高亮，旋钮作用于该通道
+  // 单击通道栏：选中高亮；再次单击同一栏：取消选中（边框恢复正常）
   el.scope.addEventListener('pointerdown', function (e) {
     const rect = el.scope.getBoundingClientRect();
     if (!rect.height) return;
@@ -481,8 +489,7 @@ export function initScope() {
       return;
     }
     const lane = Math.min(3, Math.max(0, Math.floor(y / (rect.height / 4))));
-    const id = CH_DEFS[lane].id;
-    if (scopeState.selected !== id) selectScopeTarget(id);
+    selectScopeTarget(CH_DEFS[lane].id);
   });
   // 窗口大小/显示变化 → 重算画布与网格
   if (typeof ResizeObserver === 'function') {

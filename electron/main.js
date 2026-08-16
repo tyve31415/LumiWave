@@ -525,14 +525,19 @@ function createWindow() {
         '})'
       );
     }).then(function () {
-      // 2.9. 通道选择：单击通道栏选中高亮，旋钮作用于选中通道（各通道参数独立）
+      // 2.9. 通道选择：单击选中高亮，再次单击取消选中；旋钮作用于选中通道（各通道参数独立）
       return probe('scope-select',
         '(async function(){' +
         '  var s = await import("./ui/scope.js");' +
         '  var cv = document.getElementById("scope");' +
         '  var rect = cv.getBoundingClientRect();' +
-        '  cv.dispatchEvent(new PointerEvent("pointerdown", { clientX: rect.left + 40, clientY: rect.top + rect.height * 0.625, bubbles: true }));' +
+        '  var cx = rect.left + 40, cy = rect.top + rect.height * 0.625;' +
+        '  cv.dispatchEvent(new PointerEvent("pointerdown", { clientX: cx, clientY: cy, bubbles: true }));' +
         '  var selCh3 = s.scopeState.selected === "ch3";' +
+        '  cv.dispatchEvent(new PointerEvent("pointerdown", { clientX: cx, clientY: cy, bubbles: true }));' +
+        '  var deselected = s.scopeState.selected === null;' +
+        '  cv.dispatchEvent(new PointerEvent("pointerdown", { clientX: cx, clientY: cy, bubbles: true }));' +
+        '  var reselected = s.scopeState.selected === "ch3";' +
         '  var hasParams = !!s.scopeState.params.ch1 && !!s.scopeState.params.ch4 && !!s.scopeState.params.mix;' +
         '  var ampBefore = s.scopeState.params.ch3.amp;' +
         '  var ch1Before = s.scopeState.params.ch1.amp;' +
@@ -547,7 +552,7 @@ function createWindow() {
         '  var mixSelected = s.scopeState.selected === "mix";' +
         '  mb.click();' +
         '  var backToCh3 = s.scopeState.selected === "ch3";' +
-        '  return { selCh3: selCh3, hasParams: hasParams, ch3Changed: ch3Changed, ch1Untouched: ch1Untouched, mixSelected: mixSelected, backToCh3: backToCh3 };' +
+        '  return { selCh3: selCh3, deselected: deselected, reselected: reselected, hasParams: hasParams, ch3Changed: ch3Changed, ch1Untouched: ch1Untouched, mixSelected: mixSelected, backToCh3: backToCh3 };' +
         '})()'
       );
     }).then(function () {

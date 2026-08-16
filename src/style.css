@@ -508,6 +508,16 @@ body::after {
   box-shadow: 0 0 6px var(--chcolor, var(--green-glow));
 }
 
+/* 窗口顶部（标题栏）内的通道开关按钮 */
+.win-bar .ch-legend { flex: none; }
+.win-bar .ch-chip {
+  padding: 1px 6px;
+  font-size: 9px;
+  gap: 3px;
+  border-radius: 8px;
+}
+.win-bar .ch-chip .chip-dot { width: 6px; height: 6px; }
+
 .chip-txt { color: var(--text); }
 
 .ch-chip.off { opacity: 0.42; }
