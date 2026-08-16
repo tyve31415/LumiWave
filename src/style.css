@@ -87,10 +87,10 @@ body::after {
   align-items: center;
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
+  /* 关键：overflow-x:auto 会让 overflow-y 也被计算为 auto，
+     下拉菜单（绝对定位在按钮下方）会被裁剪在导航栏内无法显示 */
+  overflow: visible;
 }
-.taskbar-wins::-webkit-scrollbar { display: none; }
 
 .task-btn {
   flex: none;

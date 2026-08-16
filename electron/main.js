@@ -371,13 +371,16 @@ function createWindow() {
         '  var settle = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };' +
         '  function pe(t, type, x, y){ t.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true })); }' +
         '  function ovInternal(d){ var ws=d.wins, ids=Object.keys(ws), o=[]; for(var i=0;i<ids.length;i++)for(var j=i+1;j<ids.length;j++){ var a=ws[ids[i]], b=ws[ids[j]]; if(!a.visible||!b.visible)continue; if(a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y)o.push(ids[i]+"x"+ids[j]); } return o; }' +
+        // 0) 先归一化布局：忽略用户记忆的窗口状态，从默认分屏开始测试
+        '  document.querySelector(".win-menu-arrange").click();' +
+        '  await settle(120);' +
         '  var m = await import("./ui/wm.js");' +
         '  var d0 = m._debugState();' +
         '  var ex0 = d0.wins.explorer;' +
         '  var w = document.querySelector(".win[data-win=timeline]");' +
         '  var bar = w.querySelector(".win-bar");' +
         '  var locks = document.querySelectorAll(".win-lock").length;' +
-        '  w.querySelector(".win-lock").click();' +
+        '  if (!w.classList.contains("unlocked")) w.querySelector(".win-lock").click();' +
         '  var unlocked = w.classList.contains("unlocked");' +
         '  var handleVisible = (function(){ var h = w.querySelector(".rs"); return h ? getComputedStyle(h).display !== "none" : false; })();' +
         // 固定栏（收藏夹·本地音乐合体窗口）：无锁按钮、不可解锁、无缩放热区、贴左缘、几何恒定
@@ -386,6 +389,15 @@ function createWindow() {
         '  var fixedStillLocked = d0.wins.explorer.locked === true && !ex.classList.contains("unlocked");' +
         '  var fixedNoHandles = !ex.querySelector(".rs");' +
         '  var leftCol = ex0.x <= 20 && ex0.y <= 20 && (d0.canvas.h - ex0.y - ex0.h) <= 20;' +
+        // 0) 顶栏「🪟 窗口」菜单：导航栏不得裁剪弹出列表，点击开合正常
+        '  var navOverflow = getComputedStyle(document.querySelector(".taskbar-wins")).overflowX;' +
+        '  var menuBtn = document.getElementById("winMenuBtn");' +
+        '  var menuList = document.getElementById("winMenuList");' +
+        '  menuBtn.click();' +
+        '  var menuOpenOk = menuList.hidden === false;' +
+        '  var menuItemCount = menuList.querySelectorAll(".win-menu-item").length;' +
+        '  menuBtn.click();' +
+        '  var menuClosedOk = menuList.hidden === true;' +
         '  await settle(100);' +
         '  var r0 = w.getBoundingClientRect();' +
         '  var sc = document.querySelector(".win[data-win=scope]").getBoundingClientRect();' +
@@ -424,7 +436,6 @@ function createWindow() {
         '  var popupOnTop = (function(){ var cw = document.querySelector(".win[data-win=channels]"); return getComputedStyle(cw).zIndex === "1200"; })();' +
         '  var popupNoHandles = !document.querySelector(".win[data-win=channels] .rs");' +
         '  var popupHasLock = !!document.querySelector(".win[data-win=channels] .win-lock");' +
-        '  var popupUnlocked = document.querySelector(".win[data-win=channels]").classList.contains("unlocked");' +
         '  document.getElementById("desktop").dispatchEvent(new PointerEvent("pointerdown", { clientX: 700, clientY: 700, bubbles: true }));' +
         '  await settle(80);' +
         '  var dP2 = m._debugState();' +
@@ -433,9 +444,11 @@ function createWindow() {
         '  await settle(80);' +
         '  var dP3 = m._debugState();' +
         '  var popupReopen = dP3.wins.channels.visible === true;' +
-        // 3.1) 自由拖动：拖动弹出层标题栏 → 位置改变（允许覆盖在其他窗口上）
+        // 3.1) 自由拖动：先确保解锁，再拖动弹出层标题栏 → 位置改变（允许覆盖在其他窗口上）
         '  var cwEl = document.querySelector(".win[data-win=channels]");' +
         '  var cwBar = cwEl.querySelector(".win-bar");' +
+        '  if (!cwEl.classList.contains("unlocked")) cwEl.querySelector(".win-lock").click();' +
+        '  var popupUnlocked = cwEl.classList.contains("unlocked");' +
         '  pe(cwBar, "pointerdown", 620, 70);' +
         '  pe(document, "pointermove", 820, 370);' +
         '  pe(document, "pointerup", 820, 370);' +
@@ -450,7 +463,7 @@ function createWindow() {
         '  await settle(150);' +
         '  var d3 = m._debugState();' +
         '  var visCount = 0; for (var k in d3.wins) if (d3.wins[k].visible) visCount++;' +
-        '  return { locks: locks, unlocked: unlocked, handleVisible: handleVisible, noLockBtn: noLockBtn, fixedStillLocked: fixedStillLocked, fixedNoHandles: fixedNoHandles, leftCol: leftCol, fixedStable: fixedStable, docked: docked, badge: badgeEl ? badgeEl.textContent : null, scopeShrunk: scopeShrunk, overlapsAfterDock: ovAfterDock, moved: moved, detached: detached, overlapsAfterMove: ovAfterMove, popupShown: popupShown, popupCentered: popupCentered, popupOnTop: popupOnTop, popupNoHandles: popupNoHandles, popupHasLock: popupHasLock, popupUnlocked: popupUnlocked, popupClosedOutside: popupClosedOutside, popupReopen: popupReopen, popupMoved: popupMoved, popupToggleHide: popupToggleHide, overlapsAfterArrange: ovInternal(d3), visibleCount: visCount };' +
+        '  return { locks: locks, unlocked: unlocked, handleVisible: handleVisible, noLockBtn: noLockBtn, fixedStillLocked: fixedStillLocked, fixedNoHandles: fixedNoHandles, leftCol: leftCol, fixedStable: fixedStable, navOverflow: navOverflow, menuOpenOk: menuOpenOk, menuClosedOk: menuClosedOk, menuItemCount: menuItemCount, docked: docked, badge: badgeEl ? badgeEl.textContent : null, scopeShrunk: scopeShrunk, overlapsAfterDock: ovAfterDock, moved: moved, detached: detached, overlapsAfterMove: ovAfterMove, popupShown: popupShown, popupCentered: popupCentered, popupOnTop: popupOnTop, popupNoHandles: popupNoHandles, popupHasLock: popupHasLock, popupUnlocked: popupUnlocked, popupClosedOutside: popupClosedOutside, popupReopen: popupReopen, popupMoved: popupMoved, popupToggleHide: popupToggleHide, overlapsAfterArrange: ovInternal(d3), visibleCount: visCount };' +
         '})()'
       );
     }).then(function () {

@@ -802,10 +802,15 @@ function wireWindow(st) {
   if (closeBtn) closeBtn.addEventListener('click', function (e) { e.stopPropagation(); hide(st); });
 }
 
-/** 「▦ 整理」：解除全部停靠、重新显示全部窗口并恢复默认分屏（弹出层收起） */
+/** 「▦ 整理」：解除全部停靠、重新显示全部窗口并恢复默认分屏（弹出层复位并收起） */
 function arrangeWindows() {
   for (const st of winState.values()) {
-    if (st.def.popup) { hide(st); continue; }
+    if (st.def.popup) {
+      st.rect = defaultRect(st.def);
+      applyRect(st);
+      hide(st);
+      continue;
+    }
     st.visible = true;
     st.el.style.display = 'flex';
     st.dock = null;
