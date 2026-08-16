@@ -3,6 +3,8 @@
    · 每个窗口有预设槽位（默认位置 + 大小），窗口不重叠、不堆叠
    · 「收藏夹 · 本地音乐」合体窗口为固定栏（最左列）：位置大小恒定，
      禁止拖动/缩放/停靠，无锁按钮；步进音序器位于最右列（可自由调整）
+   · 「通道控制」为弹出层：顶栏按钮弹出，悬浮覆盖在其他窗口之上，
+     不参与分屏与障碍计算，点击窗口外自动收起
    · 右上角「锁定」按钮：锁定=禁止移动/缩放（默认）；解锁后可调整
    · 拖动（参考 VS Code）：
      - 拖动中窗口抬升到最上层并半透明，可【暂时悬浮在其他窗口之上】
@@ -27,18 +29,20 @@ const RESIZE_DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 const DOCK_SIDE_LABEL = { right: '▶', left: '◀', bottom: '▼', top: '▲' };
 
 /* fixed: 固定栏 —— 位置/大小锁定，禁止拖动、缩放与停靠（该窗口无锁按钮）
-   收藏夹与本地音乐已合并为「explorer」一个窗口；步进音序器与其交换位置（最右列） */
+   收藏夹与本地音乐已合并为「explorer」一个窗口；步进音序器与其交换位置（最右列）
+   popup: 弹出层 —— 由顶栏按钮打开，悬浮覆盖在其他窗口之上（无锁按钮、不参与分屏、
+   点击窗口外自动收起，默认隐藏） */
 const WIN_DEFS = [
   { id: 'explorer',  title: '🗂 收藏夹 · 本地音乐', short: '收藏夹', x: 10,   y: 10,  w: 336, h: 780, minW: 300, minH: 400, fixed: true },
+  { id: 'channels',  title: '🎛 通道控制',          short: '通道',   x: 408,  y: 48,  w: 720, h: 120, minW: 460, minH: 100, popup: true },
   { id: 'scope',     title: '◉ 主示波器',          short: '示波器', x: 356,  y: 10,  w: 824, h: 400, minW: 380, minH: 240 },
-  { id: 'channels',  title: '🎛 通道控制',          short: '通道',   x: 356,  y: 420, w: 824, h: 110, minW: 460, minH: 100 },
-  { id: 'mixer',     title: '🎹 混音器 · CH1',      short: '混音器', x: 356,  y: 540, w: 450, h: 250, minW: 380, minH: 240 },
-  { id: 'timeline',  title: '🕘 时间线 · CH2',      short: '时间线', x: 816,  y: 540, w: 364, h: 250, minW: 320, minH: 200 },
+  { id: 'mixer',     title: '🎹 混音器 · CH1',      short: '混音器', x: 356,  y: 420, w: 450, h: 370, minW: 380, minH: 240 },
+  { id: 'timeline',  title: '🕘 时间线 · CH2',      short: '时间线', x: 816,  y: 420, w: 364, h: 370, minW: 320, minH: 200 },
   { id: 'sequencer', title: '🔢 步进音序器 · CH4',  short: '音序器', x: 1190, y: 10,  w: 336, h: 780, minW: 324, minH: 190 }
 ];
 
-/* v3：收藏夹+音乐合并为一个固定栏并与音序器交换位置，弃用旧版记忆 */
-const SAVE_KEY = 'musicWinLayout3';
+/* v4：通道控制改为顶栏弹出层（不再占分屏格位），混音器/时间线上移补齐空白 */
+const SAVE_KEY = 'musicWinLayout4';
 
 const winState = new Map();
 let focusedId = null;
@@ -127,11 +131,11 @@ function isDockLinked(aId, bId) {
   return !!(a && b && ((a.dock && a.dock.targetId === bId) || (b.dock && b.dock.targetId === aId)));
 }
 
-/** 障碍：其他可见窗口（停靠联动对除外） */
+/** 障碍：其他可见窗口（停靠联动对与弹出层除外） */
 function obstaclesFor(excludeId) {
   const out = [];
   for (const st of winState.values()) {
-    if (st.def.id === excludeId || !st.visible) continue;
+    if (st.def.id === excludeId || !st.visible || st.def.popup) continue;
     if (isDockLinked(excludeId, st.def.id)) continue;
     out.push({
       x: st.rect.x - GAP,
@@ -332,8 +336,8 @@ function show(st) {
   if (st.visible) { focus(st); return; }
   st.visible = true;
   st.el.style.display = 'flex';
-  if (st.def.fixed) {
-    // 固定栏：重开即回预设槽位（位置与大小恒定）
+  if (st.def.fixed || st.def.popup) {
+    // 固定栏/弹出层：重开即回预设槽位（位置与大小恒定）
     st.rect = defaultRect(st.def);
     applyRect(st);
     focus(st);
@@ -365,15 +369,15 @@ function toggle(st) {
 
 /* ---------- 锁定 ---------- */
 function setLocked(st, locked) {
-  if (st.def.fixed) {
-    // 固定栏：永久锁定，禁止解锁
+  if (st.def.fixed || st.def.popup) {
+    // 固定栏/弹出层：永久锁定，禁止解锁
     st.locked = true;
     st.el.classList.remove('unlocked');
     const btn = st.el.querySelector('.win-lock');
     if (btn) {
       btn.textContent = '🔒';
       btn.classList.add('locked', 'fixed');
-      btn.title = '固定栏：位置与大小固定，禁止更改';
+      btn.title = st.def.popup ? '弹出层：悬浮覆盖显示，不可移动缩放' : '固定栏：位置与大小固定，禁止更改';
     }
     return;
   }
@@ -462,7 +466,7 @@ function zoneSideFor(hit, cx, cy) {
 
 function canDock(st, hit, side) {
   const T = hit.rect;
-  if (st.def.fixed || hit.def.fixed) return false; // 固定栏不参与停靠
+  if (st.def.fixed || st.def.popup || hit.def.fixed || hit.def.popup) return false; // 固定栏与弹出层不参与停靠
   if (isDockLinked(st.def.id, hit.def.id)) return false;
   if (side === 'right' || side === 'left') {
     const half = (T.w - GAP) / 2;
@@ -491,9 +495,9 @@ function magneticCandidate(st, r) {
   for (const c of corners) {
     if (c.dx <= SNAP && c.dy <= SNAP) cands.push({ x: c.x, y: c.y, w: c.w, h: c.h, dist: c.dx + c.dy });
   }
-  // 对齐其他窗口边缘（相邻放置）
+  // 对齐其他窗口边缘（相邻放置；弹出层除外）
   for (const other of winState.values()) {
-    if (other.def.id === st.def.id || !other.visible) continue;
+    if (other.def.id === st.def.id || !other.visible || other.def.popup) continue;
     if (isDockLinked(st.def.id, other.def.id)) continue;
     const o = other.rect;
     if (Math.abs(r.x - (o.x + o.w + GAP)) <= SNAP) cands.push({ x: o.x + o.w + GAP, y: r.y, w: r.w, h: r.h, dist: Math.abs(r.x - (o.x + o.w + GAP)) });
@@ -515,7 +519,7 @@ function wireDrag(st) {
   const bar = st.el.querySelector('.win-bar');
   if (!bar) return;
   bar.addEventListener('pointerdown', function (e) {
-    if (st.locked || st.def.fixed) return;
+    if (st.locked || st.def.fixed || st.def.popup) return;
     if (e.target.classList.contains('win-btn')) return;
     if (e.button !== 0) return;
     e.preventDefault();
@@ -646,7 +650,7 @@ function snapResize(st, dir) {
 }
 
 function wireResize(st) {
-  if (st.def.fixed) return; // 固定栏：不生成缩放热区，尺寸不可更改
+  if (st.def.fixed || st.def.popup) return; // 固定栏与弹出层：不生成缩放热区，尺寸不可更改
   for (const dir of RESIZE_DIRS) {
     const h = document.createElement('div');
     h.className = 'rs rs-' + dir;
@@ -704,10 +708,10 @@ function wireWindow(st) {
   const minBtn = st.el.querySelector('.win-min');
   const closeBtn = st.el.querySelector('.win-close');
   if (lockBtn) {
-    if (st.def.fixed) {
-      // 固定栏：永久锁定，不响应点击（位置与大小不可更改）
+    if (st.def.fixed || st.def.popup) {
+      // 固定栏/弹出层：永久锁定，不响应点击（位置与大小不可更改）
       lockBtn.classList.add('fixed');
-      lockBtn.title = '固定栏：位置与大小固定，禁止更改';
+      lockBtn.title = st.def.popup ? '弹出层：悬浮覆盖显示，不可移动缩放' : '固定栏：位置与大小固定，禁止更改';
     } else {
       lockBtn.addEventListener('click', function (e) { e.stopPropagation(); setLocked(st, !st.locked); });
     }
@@ -728,9 +732,10 @@ function wireTaskbar() {
   if (arrangeBtn) arrangeBtn.addEventListener('click', arrangeWindows);
 }
 
-/** 「▦ 整理」：解除全部停靠、重新显示全部窗口并恢复默认分屏 */
+/** 「▦ 整理」：解除全部停靠、重新显示全部窗口并恢复默认分屏（弹出层收起） */
 function arrangeWindows() {
   for (const st of winState.values()) {
+    if (st.def.popup) { hide(st); continue; }
     st.visible = true;
     st.el.style.display = 'flex';
     st.dock = null;
@@ -759,15 +764,16 @@ export function initWM() {
       def: def,
       el: el,
       rect: { x: 0, y: 0, w: def.minW, h: def.minH },
-      visible: s.visible !== false,
-      locked: def.fixed ? true : (s.locked !== false),
-      dock: (!def.fixed && s.dock && s.dock.targetId) ? { targetId: s.dock.targetId, side: s.dock.side || 'right' } : null,
+      visible: def.popup ? (s.visible === true) : (s.visible !== false), // 弹出层默认隐藏
+      locked: (def.fixed || def.popup) ? true : (s.locked !== false),
+      dock: (!def.fixed && !def.popup && s.dock && s.dock.targetId) ? { targetId: s.dock.targetId, side: s.dock.side || 'right' } : null,
       focused: false
     };
     el.classList.toggle('fixed-win', !!def.fixed);
+    el.classList.toggle('win-popup', !!def.popup);
     let r = null;
-    if (def.fixed) {
-      // 固定栏：始终回到预设槽位（最右列），忽略旧布局记忆
+    if (def.fixed || def.popup) {
+      // 固定栏/弹出层：始终回到预设槽位，忽略旧布局记忆
       r = defaultRect(def);
     } else if (typeof s.x === 'number' && typeof s.w === 'number') {
       r = { x: s.x, y: s.y, w: Math.max(def.minW, s.w), h: Math.max(def.minH, s.h) };
@@ -794,6 +800,17 @@ export function initWM() {
 
   wireTaskbar();
   refreshTaskbar();
+
+  // 弹出层：点击窗口外任意处（任务栏除外）自动收起
+  desktopEl.addEventListener('pointerdown', function (e) {
+    const t = e.target;
+    if (t && t.closest && t.closest('.taskbar')) return;
+    for (const st of winState.values()) {
+      if (!st.def.popup || !st.visible) continue;
+      if (st.el.contains(t)) continue;
+      hide(st);
+    }
+  }, true);
 
   if (typeof ResizeObserver === 'function') {
     new ResizeObserver(function () { computeCanvas(); }).observe(desktopEl);

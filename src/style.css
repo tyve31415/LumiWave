@@ -258,11 +258,17 @@ body::after {
   background: rgba(60, 255, 136, 0.08);
 }
 
-/* 固定栏（最右列）：永久锁定，锁按钮不可点击 */
+/* 固定栏（最左列）：永久锁定，锁按钮不可点击 */
 .win-lock.fixed { cursor: default; opacity: 0.9; }
 .win-lock.fixed:hover { color: var(--amber); border-color: rgba(255, 180, 84, 0.45); background: rgba(255, 180, 84, 0.08); }
 .win.fixed-win { border-color: rgba(60, 255, 136, 0.22); }
 .win.fixed-win .win-bar { cursor: default; }
+
+/* 弹出层窗口（通道控制）：悬浮覆盖在其他窗口之上 */
+.win.win-popup {
+  z-index: 1200;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.8), 0 0 26px rgba(60, 255, 136, 0.22);
+}
 
 .win.focused .win-bar {
   background: linear-gradient(180deg, #124028, #0a1f14);

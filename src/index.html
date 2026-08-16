@@ -19,7 +19,7 @@
       <nav class="taskbar-wins">
         <button class="task-btn" data-task="scope" title="打开/聚焦主示波器">📟 示波器</button>
         <button class="task-btn" data-task="explorer" title="打开/聚焦收藏夹·本地音乐（CH3）">🗂 收藏夹·音乐</button>
-        <button class="task-btn" data-task="channels" title="打开/聚焦通道控制">🎛 通道</button>
+        <button class="task-btn" data-task="channels" title="弹出通道控制（悬浮层，点击外部收起）">🎛 通道</button>
         <button class="task-btn" data-task="mixer" title="打开/聚焦混音器（CH1）">🎹 混音器</button>
         <button class="task-btn" data-task="timeline" title="打开/聚焦时间线（CH2）">🕘 时间线</button>
         <button class="task-btn" data-task="sequencer" title="打开/聚焦音序器（CH4）">🔢 音序器</button>
@@ -134,11 +134,10 @@
         </div>
       </section>
 
-      <!-- 通道控制窗口 -->
+      <!-- 通道控制窗口（顶栏弹出层 · 悬浮覆盖 · 无锁按钮） -->
       <section class="win" data-win="channels">
         <header class="win-bar">
           <span class="win-title">🎛 通道控制 · CH1–CH4 大通道</span>
-          <button class="win-btn win-lock locked" title="已锁定：禁止移动与缩放（点击解锁）">🔒</button>
           <button class="win-btn win-min" title="最小化">—</button>
           <button class="win-btn win-close" title="关闭（任务栏可重新打开）">×</button>
         </header>
