@@ -1,6 +1,8 @@
 /* =========================================================
    VS Code 式分屏窗口管理器（固定布局 + 锁定 + 悬浮拖动 + 停靠）
    · 每个窗口有预设槽位（默认位置 + 大小），窗口不重叠、不堆叠
+   · 「收藏夹」与「本地音乐」为最右固定栏：同宽同列、位置大小恒定，
+     禁止拖动/缩放/停靠，锁按钮永久锁定（不可解锁）
    · 右上角「锁定」按钮：锁定=禁止移动/缩放（默认）；解锁后可调整
    · 拖动（参考 VS Code）：
      - 拖动中窗口抬升到最上层并半透明，可【暂时悬浮在其他窗口之上】
@@ -24,17 +26,19 @@ const SNAP = 12;   // 磁吸距离
 const RESIZE_DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 const DOCK_SIDE_LABEL = { right: '▶', left: '◀', bottom: '▼', top: '▲' };
 
+/* fixed: 最右固定栏 —— 位置/大小锁定，禁止拖动、缩放与停靠，不可解锁 */
 const WIN_DEFS = [
-  { id: 'explorer',  title: '🗂 收藏夹',          short: '收藏夹', x: 10,  y: 10,  w: 260, h: 470, minW: 240, minH: 180 },
-  { id: 'music',     title: '🎧 本地音乐 · CH3',  short: '音乐',   x: 10,  y: 490, w: 260, h: 300, minW: 240, minH: 200 },
-  { id: 'scope',     title: '◉ 主示波器',        short: '示波器', x: 280, y: 10,  w: 900, h: 400, minW: 420, minH: 240 },
-  { id: 'channels',  title: '🎛 通道控制',        short: '通道',   x: 280, y: 420, w: 900, h: 110, minW: 460, minH: 100 },
-  { id: 'mixer',     title: '🎹 混音器 · CH1',    short: '混音器', x: 280, y: 540, w: 500, h: 250, minW: 380, minH: 240 },
-  { id: 'timeline',  title: '🕘 时间线 · CH2',    short: '时间线', x: 790, y: 540, w: 390, h: 250, minW: 380, minH: 200 },
-  { id: 'sequencer', title: '🔢 音序器 · CH4',    short: '音序器', x: 1190, y: 10, w: 336, h: 780, minW: 324, minH: 190 }
+  { id: 'explorer',  title: '🗂 收藏夹',          short: '收藏夹', x: 1266, y: 10,  w: 260, h: 470, minW: 240, minH: 180, fixed: true },
+  { id: 'music',     title: '🎧 本地音乐 · CH3',  short: '音乐',   x: 1266, y: 490, w: 260, h: 300, minW: 240, minH: 200, fixed: true },
+  { id: 'sequencer', title: '🔢 音序器 · CH4',    short: '音序器', x: 10,   y: 10,  w: 336, h: 780, minW: 324, minH: 190 },
+  { id: 'scope',     title: '◉ 主示波器',        short: '示波器', x: 356,  y: 10,  w: 900, h: 400, minW: 420, minH: 240 },
+  { id: 'channels',  title: '🎛 通道控制',        short: '通道',   x: 356,  y: 420, w: 900, h: 110, minW: 460, minH: 100 },
+  { id: 'mixer',     title: '🎹 混音器 · CH1',    short: '混音器', x: 356,  y: 540, w: 450, h: 250, minW: 380, minH: 240 },
+  { id: 'timeline',  title: '🕘 时间线 · CH2',    short: '时间线', x: 816,  y: 540, w: 440, h: 250, minW: 380, minH: 200 }
 ];
 
-const SAVE_KEY = 'musicWinLayout';
+/* v2：右栏改固定布局后弃用旧版记忆，避免旧坐标与固定栏冲突 */
+const SAVE_KEY = 'musicWinLayout2';
 
 const winState = new Map();
 let focusedId = null;
@@ -328,6 +332,15 @@ function show(st) {
   if (st.visible) { focus(st); return; }
   st.visible = true;
   st.el.style.display = 'flex';
+  if (st.def.fixed) {
+    // 固定栏：重开即回预设槽位（位置与大小恒定）
+    st.rect = defaultRect(st.def);
+    applyRect(st);
+    focus(st);
+    saveLayout();
+    bus.emit('win-shown', st.def.id);
+    return;
+  }
   // 仍处于停靠关系 → 回到停靠位置；否则原位置被占用则另寻空白
   if (st.dock) {
     const T = winState.get(st.dock.targetId);
@@ -352,6 +365,18 @@ function toggle(st) {
 
 /* ---------- 锁定 ---------- */
 function setLocked(st, locked) {
+  if (st.def.fixed) {
+    // 固定栏：永久锁定，禁止解锁
+    st.locked = true;
+    st.el.classList.remove('unlocked');
+    const btn = st.el.querySelector('.win-lock');
+    if (btn) {
+      btn.textContent = '🔒';
+      btn.classList.add('locked', 'fixed');
+      btn.title = '固定栏：位置与大小固定，禁止更改';
+    }
+    return;
+  }
   st.locked = !!locked;
   st.el.classList.toggle('unlocked', !st.locked);
   const btn = st.el.querySelector('.win-lock');
@@ -437,6 +462,7 @@ function zoneSideFor(hit, cx, cy) {
 
 function canDock(st, hit, side) {
   const T = hit.rect;
+  if (st.def.fixed || hit.def.fixed) return false; // 固定栏不参与停靠
   if (isDockLinked(st.def.id, hit.def.id)) return false;
   if (side === 'right' || side === 'left') {
     const half = (T.w - GAP) / 2;
@@ -489,7 +515,7 @@ function wireDrag(st) {
   const bar = st.el.querySelector('.win-bar');
   if (!bar) return;
   bar.addEventListener('pointerdown', function (e) {
-    if (st.locked) return;
+    if (st.locked || st.def.fixed) return;
     if (e.target.classList.contains('win-btn')) return;
     if (e.button !== 0) return;
     e.preventDefault();
@@ -620,6 +646,7 @@ function snapResize(st, dir) {
 }
 
 function wireResize(st) {
+  if (st.def.fixed) return; // 固定栏：不生成缩放热区，尺寸不可更改
   for (const dir of RESIZE_DIRS) {
     const h = document.createElement('div');
     h.className = 'rs rs-' + dir;
@@ -676,7 +703,15 @@ function wireWindow(st) {
   const lockBtn = st.el.querySelector('.win-lock');
   const minBtn = st.el.querySelector('.win-min');
   const closeBtn = st.el.querySelector('.win-close');
-  if (lockBtn) lockBtn.addEventListener('click', function (e) { e.stopPropagation(); setLocked(st, !st.locked); });
+  if (lockBtn) {
+    if (st.def.fixed) {
+      // 固定栏：永久锁定，不响应点击（位置与大小不可更改）
+      lockBtn.classList.add('fixed');
+      lockBtn.title = '固定栏：位置与大小固定，禁止更改';
+    } else {
+      lockBtn.addEventListener('click', function (e) { e.stopPropagation(); setLocked(st, !st.locked); });
+    }
+  }
   if (minBtn) minBtn.addEventListener('click', function (e) { e.stopPropagation(); hide(st); });
   if (closeBtn) closeBtn.addEventListener('click', function (e) { e.stopPropagation(); hide(st); });
 }
@@ -725,12 +760,16 @@ export function initWM() {
       el: el,
       rect: { x: 0, y: 0, w: def.minW, h: def.minH },
       visible: s.visible !== false,
-      locked: s.locked !== false,
-      dock: (s.dock && s.dock.targetId) ? { targetId: s.dock.targetId, side: s.dock.side || 'right' } : null,
+      locked: def.fixed ? true : (s.locked !== false),
+      dock: (!def.fixed && s.dock && s.dock.targetId) ? { targetId: s.dock.targetId, side: s.dock.side || 'right' } : null,
       focused: false
     };
+    el.classList.toggle('fixed-win', !!def.fixed);
     let r = null;
-    if (typeof s.x === 'number' && typeof s.w === 'number') {
+    if (def.fixed) {
+      // 固定栏：始终回到预设槽位（最右列），忽略旧布局记忆
+      r = defaultRect(def);
+    } else if (typeof s.x === 'number' && typeof s.w === 'number') {
       r = { x: s.x, y: s.y, w: Math.max(def.minW, s.w), h: Math.max(def.minH, s.h) };
       if (!isRectValid(def.id, r)) r = findFreeRect(def.id, r);
     }

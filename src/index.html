@@ -243,14 +243,21 @@
               <input type="range" id="audioSeek" min="0" max="1000" value="0">
               <span id="audioTime">0:00 / 0:00</span>
             </div>
-            <div class="audio-scopes">
-              <div class="audio-scope">
-                <span class="audio-scope-label">波形</span>
-                <canvas id="audioWave"></canvas>
-              </div>
-              <div class="audio-scope">
-                <span class="audio-scope-label">频谱</span>
-                <canvas id="audioSpectrum"></canvas>
+            <!-- 二级菜单：小波形 + 频谱（默认折叠，点击展开） -->
+            <div class="audio-scopes-menu">
+              <button id="audioScopesToggle" class="scopes-toggle collapsed" aria-expanded="false" title="二级菜单：展开/收起波形与频谱">
+                <span class="toggle-caret">▸</span> 波形 / 频谱
+                <span class="toggle-hint">点击展开</span>
+              </button>
+              <div class="audio-scopes collapsed" id="audioScopesPanel">
+                <div class="audio-scope">
+                  <span class="audio-scope-label">波形</span>
+                  <canvas id="audioWave"></canvas>
+                </div>
+                <div class="audio-scope">
+                  <span class="audio-scope-label">频谱</span>
+                  <canvas id="audioSpectrum"></canvas>
+                </div>
               </div>
             </div>
           </div>

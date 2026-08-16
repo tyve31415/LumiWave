@@ -28,6 +28,7 @@ let audioSrcNode = null;
 let audioAnalyser = null;
 let audioWaveData = null;
 let audioFreqData = null;
+let scopesOpen = false; // 波形/频谱二级菜单：默认折叠
 
 function initAudioPlayer() {
   audioEl = new Audio();
@@ -137,9 +138,10 @@ export function stopAudio() {
   el.audioSeek.value = '0';
 }
 
-/* ---------- 音频示波器绘制（音乐窗口内） ---------- */
+/* ---------- 音频示波器绘制（音乐窗口内 · 二级菜单） ---------- */
 function drawAudioScopes() {
-  if (!audioAnalyser || !audioState.loaded) return;
+  if (!audioAnalyser || !audioState.loaded || !scopesOpen) return;
+  if (audioState.w < 2 || audioState.h < 2 || audioState.sw < 2 || audioState.sh < 2) return;
   // 波形
   audioAnalyser.getFloatTimeDomainData(audioWaveData);
   awctx.fillStyle = 'rgba(2,7,4,0.24)';
@@ -181,6 +183,19 @@ export function resizeAudio() {
   audioState.sw = b.w; audioState.sh = b.h;
 }
 
+/* ---------- 波形/频谱二级菜单（默认折叠，点击展开） ---------- */
+function setScopesOpen(open) {
+  scopesOpen = !!open;
+  el.audioScopesPanel.classList.toggle('collapsed', !scopesOpen);
+  el.audioScopesToggle.classList.toggle('collapsed', !scopesOpen);
+  el.audioScopesToggle.setAttribute('aria-expanded', scopesOpen ? 'true' : 'false');
+  const caret = el.audioScopesToggle.querySelector('.toggle-caret');
+  const hint = el.audioScopesToggle.querySelector('.toggle-hint');
+  if (caret) caret.textContent = scopesOpen ? '▾' : '▸';
+  if (hint) hint.textContent = scopesOpen ? '点击收起' : '点击展开';
+  if (scopesOpen) resizeAudio();
+}
+
 /** 通道条音量与音乐窗口音量双向同步 */
 function syncVolFromChannel() {
   const v = Math.round(chState.ch3.vol * 100);
@@ -213,6 +228,10 @@ export function initAudioPlayerModule() {
       audioEl.currentTime = audioEl.duration * parseFloat(el.audioSeek.value) / 1000;
     }
   });
+
+  // 波形/频谱二级菜单：点击展开/收起（默认折叠）
+  el.audioScopesToggle.addEventListener('click', function () { setScopesOpen(!scopesOpen); });
+  setScopesOpen(false);
 
   // 通道条 CH3 音量变化 → 同步音乐窗口滑块
   bus.on('channels-changed', syncVolFromChannel);

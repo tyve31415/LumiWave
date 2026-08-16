@@ -70,6 +70,8 @@ export const el = {
   audioTime: byId('audioTime'),
   audioWave: byId('audioWave'),
   audioSpectrum: byId('audioSpectrum'),
+  audioScopesToggle: byId('audioScopesToggle'),
+  audioScopesPanel: byId('audioScopesPanel'),
 
   // 收藏夹（资源管理器式）
   favAddBtn: byId('favAddBtn'),

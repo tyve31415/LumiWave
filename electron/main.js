@@ -364,19 +364,30 @@ function createWindow() {
         '({ desktop: (function(){ var d = document.getElementById("desktop").getBoundingClientRect(); return { w: Math.round(d.width), h: Math.round(d.height) }; })(), wins: (function(){ var out = []; document.querySelectorAll(".win").forEach(function(w){ if (w.style.display === "none") return; var r = w.getBoundingClientRect(); out.push({ id: w.dataset.win, x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }); }); return out; })(), scope: (function(){ var c = document.getElementById("scope"); return { w: c.clientWidth, h: c.clientHeight }; })(), rsHandles: document.querySelectorAll(".rs").length, taskBtns: document.querySelectorAll(".task-btn").length })'
       );
     }).then(function () {
-      // 1.8. VS Code 式窗口逻辑：锁定 / 悬浮拖动 / 分屏停靠 / 磁吸 / 无重叠
+      // 1.8. VS Code 式窗口逻辑：锁定 / 悬浮拖动 / 分屏停靠 / 磁吸 / 无重叠 + 最右固定栏
       // 断言基于 wm 内部状态（隐藏探针窗口的 DOM 布局重算会延迟，不可靠）
       return probe('constraints',
         '(async function(){' +
         '  var settle = function(ms){ return new Promise(function(r){ setTimeout(r, ms); }); };' +
         '  function pe(t, type, x, y){ t.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true })); }' +
         '  function ovInternal(d){ var ws=d.wins, ids=Object.keys(ws), o=[]; for(var i=0;i<ids.length;i++)for(var j=i+1;j<ids.length;j++){ var a=ws[ids[i]], b=ws[ids[j]]; if(!a.visible||!b.visible)continue; if(a.x<b.x+b.w&&a.x+a.w>b.x&&a.y<b.y+b.h&&a.y+a.h>b.y)o.push(ids[i]+"x"+ids[j]); } return o; }' +
-        '  var w = document.querySelector(".win[data-win=music]");' +
+        '  var m = await import("./ui/wm.js");' +
+        '  var d0 = m._debugState();' +
+        '  var ex0 = d0.wins.explorer, mu0 = d0.wins.music;' +
+        '  var w = document.querySelector(".win[data-win=timeline]");' +
         '  var bar = w.querySelector(".win-bar");' +
         '  var locks = document.querySelectorAll(".win-lock").length;' +
         '  w.querySelector(".win-lock").click();' +
         '  var unlocked = w.classList.contains("unlocked");' +
         '  var handleVisible = (function(){ var h = w.querySelector(".rs"); return h ? getComputedStyle(h).display !== "none" : false; })();' +
+        // 固定栏（收藏夹 + 音乐）：锁按钮不可解锁、无缩放热区、同列等宽、贴最右、几何恒定
+        '  var ex = document.querySelector(".win[data-win=explorer]");' +
+        '  var mu = document.querySelector(".win[data-win=music]");' +
+        '  ex.querySelector(".win-lock").click();' +
+        '  var fixedLock = ex.querySelector(".win-lock").classList.contains("fixed");' +
+        '  var fixedStillLocked = d0.wins.explorer.locked === true && !ex.classList.contains("unlocked");' +
+        '  var fixedNoHandles = !ex.querySelector(".rs") && !mu.querySelector(".rs");' +
+        '  var rightCol = (d0.canvas.w - ex0.x - ex0.w) <= 20 && ex0.x === mu0.x && ex0.w === mu0.w;' +
         '  await settle(100);' +
         '  var r0 = w.getBoundingClientRect();' +
         '  var sc = document.querySelector(".win[data-win=scope]").getBoundingClientRect();' +
@@ -385,31 +396,31 @@ function createWindow() {
         '  pe(document, "pointermove", sc.left + sc.width * 0.88, sc.top + sc.height * 0.5);' +
         '  pe(document, "pointerup", sc.left + sc.width * 0.88, sc.top + sc.height * 0.5);' +
         '  await settle(150);' +
-        '  var m = await import("./ui/wm.js");' +
         '  var d1 = m._debugState();' +
         '  var badgeEl = w.querySelector(".dock-badge");' +
-        '  var docked = !!(d1.wins.music.dock && d1.wins.music.dock.targetId === "scope" && d1.wins.music.dock.side === "right");' +
+        '  var docked = !!(d1.wins.timeline.dock && d1.wins.timeline.dock.targetId === "scope" && d1.wins.timeline.dock.side === "right");' +
         '  var scopeShrunk = d1.wins.scope.w < 900 - 100;' +
-        '  var dockedX = d1.wins.music.x, dockedY = d1.wins.music.y;' +
+        '  var dockedX = d1.wins.timeline.x, dockedY = d1.wins.timeline.y;' +
         '  var ovAfterDock = ovInternal(d1);' +
-        // 2) 隐藏其余窗口，拖动音乐（解除停靠）到空白处（delta 基于内部状态计算）
-        '  ["mixer","timeline","channels","scope"].forEach(function(id){ document.querySelector(".win[data-win=" + id + "]").querySelector(".win-close").click(); });' +
+        // 2) 隐藏其余窗口，拖动时间线（解除停靠）到空白处（delta 基于内部状态计算）
+        '  ["mixer","channels","scope"].forEach(function(id){ document.querySelector(".win[data-win=" + id + "]").querySelector(".win-close").click(); });' +
         '  await settle(120);' +
         '  var sx2 = 600, sy2 = 500;' +
-        '  var tx2 = sx2 + (288 - d1.wins.music.x), ty2 = sy2 + (350 - d1.wins.music.y);' +
+        '  var tx2 = sx2 + (360 - d1.wins.timeline.x), ty2 = sy2 + (100 - d1.wins.timeline.y);' +
         '  pe(bar, "pointerdown", sx2, sy2);' +
         '  pe(document, "pointermove", tx2, ty2);' +
         '  pe(document, "pointerup", tx2, ty2);' +
         '  await settle(150);' +
         '  var d2 = m._debugState();' +
-        '  var moved = (Math.abs(d2.wins.music.x - dockedX) > 20 || Math.abs(d2.wins.music.y - dockedY) > 20);' +
-        '  var detached = !d2.wins.music.dock;' +
+        '  var moved = (Math.abs(d2.wins.timeline.x - dockedX) > 20 || Math.abs(d2.wins.timeline.y - dockedY) > 20);' +
+        '  var detached = !d2.wins.timeline.dock;' +
         '  var ovAfterMove = ovInternal(d2);' +
+        '  var fixedStable = (d2.wins.explorer.x === ex0.x && d2.wins.explorer.y === ex0.y && d2.wins.explorer.w === ex0.w && d2.wins.explorer.h === ex0.h && d2.wins.music.x === mu0.x && d2.wins.music.y === mu0.y && d2.wins.music.w === mu0.w && d2.wins.music.h === mu0.h);' +
         '  document.querySelector(".task-btn[data-act=arrange]").click();' +
         '  await settle(150);' +
         '  var d3 = m._debugState();' +
         '  var visCount = 0; for (var k in d3.wins) if (d3.wins[k].visible) visCount++;' +
-        '  return { locks: locks, unlocked: unlocked, handleVisible: handleVisible, docked: docked, badge: badgeEl ? badgeEl.textContent : null, scopeShrunk: scopeShrunk, overlapsAfterDock: ovAfterDock, moved: moved, detached: detached, overlapsAfterMove: ovAfterMove, overlapsAfterArrange: ovInternal(d3), visibleCount: visCount };' +
+        '  return { locks: locks, unlocked: unlocked, handleVisible: handleVisible, fixedLock: fixedLock, fixedStillLocked: fixedStillLocked, fixedNoHandles: fixedNoHandles, rightCol: rightCol, fixedStable: fixedStable, docked: docked, badge: badgeEl ? badgeEl.textContent : null, scopeShrunk: scopeShrunk, overlapsAfterDock: ovAfterDock, moved: moved, detached: detached, overlapsAfterMove: ovAfterMove, overlapsAfterArrange: ovInternal(d3), visibleCount: visCount };' +
         '})()'
       );
     }).then(function () {
