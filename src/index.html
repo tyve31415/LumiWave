@@ -18,11 +18,10 @@
       <span class="app-title">◉ LumiWave</span>
       <nav class="taskbar-wins">
         <button class="task-btn" data-task="scope" title="打开/聚焦主示波器">📟 示波器</button>
-        <button class="task-btn" data-task="explorer" title="打开/聚焦收藏夹">🗂 收藏夹</button>
+        <button class="task-btn" data-task="explorer" title="打开/聚焦收藏夹·本地音乐（CH3）">🗂 收藏夹·音乐</button>
         <button class="task-btn" data-task="channels" title="打开/聚焦通道控制">🎛 通道</button>
         <button class="task-btn" data-task="mixer" title="打开/聚焦混音器（CH1）">🎹 混音器</button>
         <button class="task-btn" data-task="timeline" title="打开/聚焦时间线（CH2）">🕘 时间线</button>
-        <button class="task-btn" data-task="music" title="打开/聚焦本地音乐（CH3）">🎧 音乐</button>
         <button class="task-btn" data-task="sequencer" title="打开/聚焦音序器（CH4）">🔢 音序器</button>
         <span class="task-sep"></span>
         <button class="task-btn" data-act="arrange" title="重新显示全部窗口并恢复默认分屏布局">▦ 整理</button>
@@ -80,11 +79,10 @@
         </div>
       </section>
 
-      <!-- 收藏夹窗口 -->
+      <!-- 收藏夹 + 本地音乐（合体固定栏 · 无锁按钮） -->
       <section class="win" data-win="explorer">
         <header class="win-bar">
-          <span class="win-title">🗂 收藏夹 · 资源管理器</span>
-          <button class="win-btn win-lock locked" title="已锁定：禁止移动与缩放（点击解锁）">🔒</button>
+          <span class="win-title">🗂 收藏夹 · 本地音乐</span>
           <button class="win-btn win-min" title="最小化">—</button>
           <button class="win-btn win-close" title="关闭（任务栏可重新打开）">×</button>
         </header>
@@ -102,6 +100,36 @@
           <div class="explorer-path" id="explorerPath">未选择文件夹</div>
           <div class="explorer-tree" id="explorerTree">
             <div class="explorer-empty">点击上方收藏夹中的文件夹<br>或点「＋」添加音乐文件夹</div>
+          </div>
+          <div class="player-sec">
+            <div class="audio-controls">
+              <button id="audioImport">📁 导入</button>
+              <button id="audioPlay">▶ 播放</button>
+              <button id="audioStop">■ 停止</button>
+              <button id="audioLoop">🔁 循环:关</button>
+              <label>音量 <input type="range" id="audioVol" min="0" max="100" value="80"> <span class="val" id="audioVolVal">80%</span></label>
+            </div>
+            <div class="audio-progress-wrap">
+              <input type="range" id="audioSeek" min="0" max="1000" value="0">
+              <span id="audioTime">0:00 / 0:00</span>
+            </div>
+            <!-- 二级菜单：小波形 + 频谱（默认折叠，点击展开） -->
+            <div class="audio-scopes-menu">
+              <button id="audioScopesToggle" class="scopes-toggle collapsed" aria-expanded="false" title="二级菜单：展开/收起波形与频谱">
+                <span class="toggle-caret">▸</span> 波形 / 频谱
+                <span class="toggle-hint">点击展开</span>
+              </button>
+              <div class="audio-scopes collapsed" id="audioScopesPanel">
+                <div class="audio-scope">
+                  <span class="audio-scope-label">波形</span>
+                  <canvas id="audioWave"></canvas>
+                </div>
+                <div class="audio-scope">
+                  <span class="audio-scope-label">频谱</span>
+                  <canvas id="audioSpectrum"></canvas>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -220,51 +248,7 @@
         </div>
       </section>
 
-      <!-- 本地音乐窗口 CH3 -->
-      <section class="win" data-win="music">
-        <header class="win-bar">
-          <span class="win-title">🎧 本地音乐播放器 · CH3</span>
-          <button class="win-btn win-lock locked" title="已锁定：禁止移动与缩放（点击解锁）">🔒</button>
-          <button class="win-btn win-min" title="最小化">—</button>
-          <button class="win-btn win-close" title="关闭（任务栏可重新打开）">×</button>
-        </header>
-        <div class="win-body">
-          <div class="panel full">
-            <h2>本地音乐（WAV / MP3 / FLAC / OGG）</h2>
-            <p class="hint-line">在「收藏夹」窗口点击音频文件即可载入并播放；也可用下方按钮导入。音频波形以蓝色显示在主示波器的 CH3 通道，可合并进主混音或独立监听。</p>
-            <div class="audio-controls">
-              <button id="audioImport">📁 导入音频</button>
-              <button id="audioPlay">▶ 播放</button>
-              <button id="audioStop">■ 停止</button>
-              <button id="audioLoop">🔁 循环:关</button>
-              <label>音量 <input type="range" id="audioVol" min="0" max="100" value="80"> <span class="val" id="audioVolVal">80%</span></label>
-            </div>
-            <div class="audio-progress-wrap">
-              <input type="range" id="audioSeek" min="0" max="1000" value="0">
-              <span id="audioTime">0:00 / 0:00</span>
-            </div>
-            <!-- 二级菜单：小波形 + 频谱（默认折叠，点击展开） -->
-            <div class="audio-scopes-menu">
-              <button id="audioScopesToggle" class="scopes-toggle collapsed" aria-expanded="false" title="二级菜单：展开/收起波形与频谱">
-                <span class="toggle-caret">▸</span> 波形 / 频谱
-                <span class="toggle-hint">点击展开</span>
-              </button>
-              <div class="audio-scopes collapsed" id="audioScopesPanel">
-                <div class="audio-scope">
-                  <span class="audio-scope-label">波形</span>
-                  <canvas id="audioWave"></canvas>
-                </div>
-                <div class="audio-scope">
-                  <span class="audio-scope-label">频谱</span>
-                  <canvas id="audioSpectrum"></canvas>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- 音序器窗口 CH4 -->
+      <!-- 步进音序器窗口 CH4（与合体窗口交换位置 → 最右列） -->
       <section class="win" data-win="sequencer">
         <header class="win-bar">
           <span class="win-title">🔢 步进音序器 · CH4</span>

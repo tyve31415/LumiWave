@@ -992,7 +992,15 @@ button.primary {
   z-index: 5;
 }
 
-/* ============ 音频播放器 ============ */
+/* ============ 音频播放器（合体窗口 · 收藏夹下方分区） ============ */
+.player-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px dashed var(--panel-border);
+  padding-top: 8px;
+}
+
 .audio-controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
 .audio-controls label { margin: 0; }
 

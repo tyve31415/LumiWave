@@ -226,7 +226,7 @@ async function playFile(f) {
   }
   desktop.addRecentFile(f.path);
   setChannelOn('ch3', true);      // 确保 CH3 通道开启
-  showWindow('music');            // 打开「本地音乐」窗口
+  showWindow('explorer');         // 聚焦「收藏夹 · 本地音乐」合体窗口
   await importAudio(res.name, new Blob([res.data]));
   state.playingPath = f.path;
   renderTree();

@@ -1,8 +1,8 @@
 /* =========================================================
    VS Code 式分屏窗口管理器（固定布局 + 锁定 + 悬浮拖动 + 停靠）
    · 每个窗口有预设槽位（默认位置 + 大小），窗口不重叠、不堆叠
-   · 「收藏夹」与「本地音乐」为最右固定栏：同宽同列、位置大小恒定，
-     禁止拖动/缩放/停靠，锁按钮永久锁定（不可解锁）
+   · 「收藏夹 · 本地音乐」合体窗口为固定栏（最左列）：位置大小恒定，
+     禁止拖动/缩放/停靠，无锁按钮；步进音序器位于最右列（可自由调整）
    · 右上角「锁定」按钮：锁定=禁止移动/缩放（默认）；解锁后可调整
    · 拖动（参考 VS Code）：
      - 拖动中窗口抬升到最上层并半透明，可【暂时悬浮在其他窗口之上】
@@ -26,19 +26,19 @@ const SNAP = 12;   // 磁吸距离
 const RESIZE_DIRS = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 const DOCK_SIDE_LABEL = { right: '▶', left: '◀', bottom: '▼', top: '▲' };
 
-/* fixed: 最右固定栏 —— 位置/大小锁定，禁止拖动、缩放与停靠，不可解锁 */
+/* fixed: 固定栏 —— 位置/大小锁定，禁止拖动、缩放与停靠（该窗口无锁按钮）
+   收藏夹与本地音乐已合并为「explorer」一个窗口；步进音序器与其交换位置（最右列） */
 const WIN_DEFS = [
-  { id: 'explorer',  title: '🗂 收藏夹',          short: '收藏夹', x: 1266, y: 10,  w: 260, h: 470, minW: 240, minH: 180, fixed: true },
-  { id: 'music',     title: '🎧 本地音乐 · CH3',  short: '音乐',   x: 1266, y: 490, w: 260, h: 300, minW: 240, minH: 200, fixed: true },
-  { id: 'sequencer', title: '🔢 音序器 · CH4',    short: '音序器', x: 10,   y: 10,  w: 336, h: 780, minW: 324, minH: 190 },
-  { id: 'scope',     title: '◉ 主示波器',        short: '示波器', x: 356,  y: 10,  w: 900, h: 400, minW: 420, minH: 240 },
-  { id: 'channels',  title: '🎛 通道控制',        short: '通道',   x: 356,  y: 420, w: 900, h: 110, minW: 460, minH: 100 },
-  { id: 'mixer',     title: '🎹 混音器 · CH1',    short: '混音器', x: 356,  y: 540, w: 450, h: 250, minW: 380, minH: 240 },
-  { id: 'timeline',  title: '🕘 时间线 · CH2',    short: '时间线', x: 816,  y: 540, w: 440, h: 250, minW: 380, minH: 200 }
+  { id: 'explorer',  title: '🗂 收藏夹 · 本地音乐', short: '收藏夹', x: 10,   y: 10,  w: 336, h: 780, minW: 300, minH: 400, fixed: true },
+  { id: 'scope',     title: '◉ 主示波器',          short: '示波器', x: 356,  y: 10,  w: 824, h: 400, minW: 380, minH: 240 },
+  { id: 'channels',  title: '🎛 通道控制',          short: '通道',   x: 356,  y: 420, w: 824, h: 110, minW: 460, minH: 100 },
+  { id: 'mixer',     title: '🎹 混音器 · CH1',      short: '混音器', x: 356,  y: 540, w: 450, h: 250, minW: 380, minH: 240 },
+  { id: 'timeline',  title: '🕘 时间线 · CH2',      short: '时间线', x: 816,  y: 540, w: 364, h: 250, minW: 320, minH: 200 },
+  { id: 'sequencer', title: '🔢 步进音序器 · CH4',  short: '音序器', x: 1190, y: 10,  w: 336, h: 780, minW: 324, minH: 190 }
 ];
 
-/* v2：右栏改固定布局后弃用旧版记忆，避免旧坐标与固定栏冲突 */
-const SAVE_KEY = 'musicWinLayout2';
+/* v3：收藏夹+音乐合并为一个固定栏并与音序器交换位置，弃用旧版记忆 */
+const SAVE_KEY = 'musicWinLayout3';
 
 const winState = new Map();
 let focusedId = null;

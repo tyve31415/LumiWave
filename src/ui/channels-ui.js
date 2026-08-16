@@ -12,8 +12,8 @@ import { bus } from '../core/bus.js';
 import { CH_DEFS, chState, setChannelOn, cycleChannelRoute, setChannelVol } from '../core/channels.js';
 import { showWindow } from './wm.js';
 
-/** 通道 id → 模块窗口 id */
-const CH_WIN = { ch1: 'mixer', ch2: 'timeline', ch3: 'music', ch4: 'sequencer' };
+/** 通道 id → 模块窗口 id（CH3 本地音乐已并入收藏夹合体窗口） */
+const CH_WIN = { ch1: 'mixer', ch2: 'timeline', ch3: 'explorer', ch4: 'sequencer' };
 
 function refreshChannelUI() {
   for (const d of CH_DEFS) {
