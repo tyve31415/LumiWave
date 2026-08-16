@@ -1,0 +1,14 @@
+# 编辑器与系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python 缓存（历史 audio2midi 遗留，若重新引入可忽略）
+__pycache__/
+*.pyc
+
+# 音频与 MIDI 中间产物
+*.flac
+*.mid
